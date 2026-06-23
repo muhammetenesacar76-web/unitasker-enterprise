@@ -36,11 +36,14 @@ public class TaskController {
         // 1. Görevi veritabanına kaydet
         String result = taskService.addTask(userId, newTask);
 
-        // 2. YENİ: Başarıyla kaydedildiyse WebSocket ile canlı bildirim yolla
+        // 2. Başarıyla kaydedildiyse WebSocket ile canlı bildirim yolla
         try {
-            // Sadece görevin atandığı kişinin (userId) frekansına mesaj fırlatıyoruz
-            String message = "🔔 Yeni Görev: " + newTask.getTitle() + " panonuza eklendi!";
+            // Sadece görevin atandığı kişinin (userId) frekansına "bildirim" (Toast) fırlatıyoruz
+            String message = "🔔 New Task Added: " + newTask.getTitle() + "!";
             messagingTemplate.convertAndSend("/topic/notifications/" + userId, message);
+
+            // YENİ: Görev eklendiğinde de tüm ekranları yenilemesi için genel kanala anons yapıyoruz
+            messagingTemplate.convertAndSend("/topic/tasks", "TASK_ADDED");
         } catch (Exception e) {
             System.out.println("Canlı bildirim gönderilemedi: " + e.getMessage());
         }
@@ -51,12 +54,28 @@ public class TaskController {
     @DeleteMapping("/tasks/delete/{taskId}")
     public ResponseEntity<String> deleteTask(@PathVariable Long taskId) {
         String result = taskService.deleteTask(taskId);
+
+        // YENİ: Görev silindiğinde tüm ekranların güncellenmesi için anons yap
+        try {
+            messagingTemplate.convertAndSend("/topic/tasks", "TASK_DELETED");
+        } catch (Exception e) {
+            System.out.println("Canlı yayın gönderilemedi: " + e.getMessage());
+        }
+
         return ResponseEntity.ok(result);
     }
 
     @PutMapping("/tasks/update/{id}")
     public ResponseEntity<String> updateTask(@PathVariable Long id, @RequestBody Task updatedTask) {
         String result = taskService.updateTask(id, updatedTask);
+
+        // YENİ: Görev güncellendiğinde (örneğin kolon değiştiğinde) tüm ekranlara anons yap
+        try {
+            messagingTemplate.convertAndSend("/topic/tasks", "TASK_UPDATED");
+        } catch (Exception e) {
+            System.out.println("Canlı yayın gönderilemedi: " + e.getMessage());
+        }
+
         return ResponseEntity.ok(result);
     }
 
@@ -64,6 +83,14 @@ public class TaskController {
     @PostMapping("/tasks/{taskId}/subtasks/add")
     public ResponseEntity<SubTask> addSubTask(@PathVariable Long taskId, @RequestBody SubTask subTask) {
         SubTask result = taskService.addSubTask(taskId, subTask);
+
+        // YENİ: Alt görev eklendiğinde checklist'lerin güncellenmesi için anons yap
+        try {
+            messagingTemplate.convertAndSend("/topic/tasks", "SUBTASK_ADDED");
+        } catch (Exception e) {
+            System.out.println("Canlı yayın gönderilemedi: " + e.getMessage());
+        }
+
         return ResponseEntity.ok(result);
     }
 
@@ -71,6 +98,14 @@ public class TaskController {
     @PutMapping("/tasks/subtasks/{subTaskId}/toggle")
     public ResponseEntity<String> toggleSubTask(@PathVariable Long subTaskId) {
         String result = taskService.toggleSubTask(subTaskId);
+
+        // YENİ: Alt görev (checklist) işaretlendiğinde tüm ekranlarda anında görülmesi için anons yap
+        try {
+            messagingTemplate.convertAndSend("/topic/tasks", "SUBTASK_TOGGLED");
+        } catch (Exception e) {
+            System.out.println("Canlı yayın gönderilemedi: " + e.getMessage());
+        }
+
         return ResponseEntity.ok(result);
     }
 }

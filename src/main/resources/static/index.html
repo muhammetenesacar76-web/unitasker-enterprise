@@ -7,7 +7,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <!-- YENİ: WebSocket Kütüphaneleri -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 
@@ -211,7 +210,7 @@
     <h1><i class="fa-solid fa-brain"></i> UniTasker Enterprise Workspace</h1>
     <div style="display: flex; gap: 10px;">
         <button class="theme-toggle-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="themeIcon"></i></button>
-        <button class="btn-icon danger" onclick="logout()" title="Logout" style="border: 1px solid var(--border);"><i class="fa-solid fa-power-off"></i></button>
+        <button class="btn-icon danger" onclick="confirmLogout()" title="Logout" style="border: 1px solid var(--border);"><i class="fa-solid fa-power-off"></i></button>
     </div>
 </div>
 
@@ -306,7 +305,7 @@
             <div class="user-profile" id="userProfileCard" style="display: none;">
                 <div class="profile-header">
                     <div class="avatar-container" title="Profile Options">
-                        <img src="" id="activeAvatar" class="user-avatar" alt="Avatar" onclick="zoomProfilePicture()">
+                        <img src="" id="activeAvatar" class="user-avatar" alt="Avatar" onclick="zoomProfilePicture()" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=User&background=4f46e5&color=fff&rounded=true';">
                         <div class="avatar-overlay" onclick="document.getElementById('avatarUploadInput').click()" title="Upload Photo">
                             <i class="fa-solid fa-camera"></i>
                         </div>
@@ -422,13 +421,12 @@
 
     let pendingVerificationEmail = "";
     let loggedInUser = null;
-    let stompClient = null; // Canlı yayın radyosu değişkeni
+    let stompClient = null;
     let otpInterval = null;
 
     function showLoader() { document.getElementById('globalLoader').style.display = 'flex'; }
     function hideLoader() { setTimeout(() => { document.getElementById('globalLoader').style.display = 'none'; }, 400); }
 
-    // YENİ: Profil Fotoğrafı Büyütme Fonksiyonları
     function zoomProfilePicture() {
         const src = document.getElementById('activeAvatar').src;
         document.getElementById('zoomedImage').src = src;
@@ -441,7 +439,6 @@
         return fetch(url, { ...options, headers });
     }
 
-    // GÜNCELLENDİ: Giriş yapınca canlı yayın bağlantısını (WebSocket) başlat
     function checkAuth() {
         if(jwtToken) {
             document.getElementById('authScreen').classList.add('hidden');
@@ -455,11 +452,11 @@
 
                     if(user.role === 'ROLE_ADMIN') {
                         document.getElementById('adminWorkspaceSelector').style.display = 'block';
-                        document.getElementById('btnAiRecommend').style.display = 'inline-flex'; // YENİ: Admin ise butonu göster
+                        document.getElementById('btnAiRecommend').style.display = 'inline-flex';
                         fetchUsers();
                     } else {
                         document.getElementById('adminWorkspaceSelector').style.display = 'none';
-                        document.getElementById('btnAiRecommend').style.display = 'none'; // YENİ: Değilse gizle
+                        document.getElementById('btnAiRecommend').style.display = 'none';
                         activeUserId = user.id;
                         userList = [user];
                         updateUserCard();
@@ -472,29 +469,38 @@
         }
     }
 
-    // YENİ: Sunucuyla canlı soket bağlantısı kuran fonksiyon
     function connectWebSocket(userId) {
-        const socket = new SockJS('/ws'); // Gizli kapıya git
+        const socket = new SockJS('/ws');
         stompClient = Stomp.over(socket);
-        stompClient.debug = null; // Konsolu mesaj yağmurundan temizle
+        stompClient.debug = null;
 
         stompClient.connect({}, function (frame) {
             console.log('Canlı Bildirim Sistemine Bağlanıldı!');
 
-            // Sadece bu kullanıcının ID'sine ait frekansı dinle
+            // Kendi bildirimlerin
             stompClient.subscribe('/topic/notifications/' + userId, function (notification) {
-                // Sunucudan mesaj gelirse sağ alttan (mavi renkle) Toast fırlat!
                 showToast(notification.body, "ai");
-
-                // Mesaj gelince, sayfayı yenilemeden görevleri tekrar çekip ekrana diz
                 if (activeUserId == userId) {
                     fetchTasks();
                 }
             });
+
+            // DÜZELTME 3: Görevlerin anında güncellenmesini sağlayan ortak kanal
+            stompClient.subscribe('/topic/tasks', function (payload) {
+                // Sunucudan "Bir görev değişti" haberi gelince, senin yazdığın kilitli fetchTasks
+                // fonksiyonunu çağırıyoruz. Sayfa yenilenmeden o kart tık diye yeni yerine geçiyor!
+                fetchTasks();
+            });
         });
     }
 
-    // GÜNCELLENDİ: Çıkış yaparken yayını kes
+    // YENİ: İngilizce Çıkış Onayı Fonksiyonu
+    function confirmLogout() {
+        if (confirm("Are you sure you want to log out?")) {
+            logout();
+        }
+    }
+
     function logout() {
         if (stompClient !== null) { stompClient.disconnect(); }
         localStorage.removeItem('jwtToken');
@@ -504,7 +510,6 @@
         showToast("Logged out successfully.", "warning");
     }
 
-    // GÜNCELLENDİ: Yeni şifre pencereleri eklendi
     function switchAuthMode(mode) {
         document.getElementById('loginBox').style.display = 'none';
         document.getElementById('registerBox').style.display = 'none';
@@ -564,7 +569,6 @@
             .finally(() => hideLoader());
     }
 
-    // YENİ: Şifre Yenileme Kod Talebi
     function requestResetCode() {
         const email = document.getElementById('forgotEmail').value.trim();
         if(!email) { showToast("Please enter your email!", "danger"); return; }
@@ -575,7 +579,7 @@
                 if(res.ok) {
                     showToast("Reset code sent! Check your email.", "success");
                     pendingVerificationEmail = email;
-                    switchAuthMode('reset'); // Yeni şifre kurma kutusuna at
+                    switchAuthMode('reset');
                 } else {
                     const text = await res.text();
                     showToast(text || "Email not found.", "danger");
@@ -584,7 +588,6 @@
             .finally(() => hideLoader());
     }
 
-    // YENİ: Kodu ve Yeni Şifreyi Kaydetme
     function submitNewPassword() {
         const code = document.getElementById('resetCodeInput').value.trim();
         const newPassword = document.getElementById('resetNewPassword').value;
@@ -641,14 +644,6 @@
                 } else { showToast(responseText || "Invalid credentials!", "danger"); }
             }).catch(err => { showToast("Server connection error!", "danger"); })
             .finally(() => hideLoader());
-    }
-
-    function logout() {
-        localStorage.removeItem('jwtToken');
-        jwtToken = null;
-        clearInterval(otpInterval);
-        checkAuth();
-        showToast("Logged out successfully.", "warning");
     }
 
     function showToast(message, type = 'success') {
@@ -742,6 +737,7 @@
         document.getElementById('userProfileCard').style.display = 'block';
         document.getElementById('activeName').textContent = user.fullName;
         const avatarImg = document.getElementById('activeAvatar');
+        // Kırık olursa devredeki onerror html taginden halledecek
         avatarImg.src = user.avatarUrl ? user.avatarUrl : `https://ui-avatars.com/api/?name=${user.fullName.replace(' ', '+')}&background=4f46e5&color=fff&bold=true`;
         const level = user.level || 1; const reqXp = level * 100;
         let title = "Junior"; if(level >= 3) title = "Mid-Level"; if(level >= 5) title = "Senior"; if(level >= 10) title = "Lead / Expert";
@@ -824,16 +820,13 @@
         });
     }
 
-    // YENİ: Aynı anda birden fazla listeleme isteğinin çakışmasını engelleyen kilit değişkeni
     let isFetchingTasks = false;
 
-    // GÜNCELLENDİ: Yarış Durumu (Race Condition) hatası kilit mekanizmasıyla çözüldü
     function fetchTasks() {
         if(!activeUserId) return Promise.resolve();
 
-        // Eğer şu an zaten bir listeleme işlemi yapılıyorsa, ikinci isteği iptal et
         if(isFetchingTasks) return Promise.resolve();
-        isFetchingTasks = true; // Kapıyı kilitle
+        isFetchingTasks = true;
 
         document.getElementById('col-PENDING').innerHTML = '';
         document.getElementById('col-IN_PROGRESS').innerHTML = '';
@@ -896,7 +889,6 @@
             })
             .catch(err => console.error("Error fetching tasks:", err))
             .finally(() => {
-                // İşlem başarıyla bitse de hata alsa da en sonunda kapıyı tekrar aç
                 isFetchingTasks = false;
             });
     }
@@ -912,7 +904,6 @@
         const todayStr = new Date().toISOString().split('T')[0];
         if(dueDate && dueDate < todayStr) { showToast("Error: You cannot set a deadline in the past!", "danger"); return; }
 
-        // DÜZELTİLDİ: URL artık Backend'deki gibi '/users/ID/tasks/add' oldu. (403 hatası çözüldü)
         fetchWithAuth(`/users/${activeUserId}/tasks/add`, {
             method: 'POST',
             body: JSON.stringify({
