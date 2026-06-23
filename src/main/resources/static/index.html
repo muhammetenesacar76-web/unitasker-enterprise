@@ -305,7 +305,7 @@
             <div class="user-profile" id="userProfileCard" style="display: none;">
                 <div class="profile-header">
                     <div class="avatar-container" title="Profile Options">
-                        <img src="" id="activeAvatar" class="user-avatar" alt="Avatar" onclick="zoomProfilePicture()" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=User&background=4f46e5&color=fff&rounded=true';">
+                        <img src="" id="activeAvatar" class="user-avatar" alt="Avatar" onclick="zoomProfilePicture()">
                         <div class="avatar-overlay" onclick="document.getElementById('avatarUploadInput').click()" title="Upload Photo">
                             <i class="fa-solid fa-camera"></i>
                         </div>
@@ -477,7 +477,6 @@
         stompClient.connect({}, function (frame) {
             console.log('Canlı Bildirim Sistemine Bağlanıldı!');
 
-            // Kendi bildirimlerin
             stompClient.subscribe('/topic/notifications/' + userId, function (notification) {
                 showToast(notification.body, "ai");
                 if (activeUserId == userId) {
@@ -485,16 +484,12 @@
                 }
             });
 
-            // DÜZELTME 3: Görevlerin anında güncellenmesini sağlayan ortak kanal
             stompClient.subscribe('/topic/tasks', function (payload) {
-                // Sunucudan "Bir görev değişti" haberi gelince, senin yazdığın kilitli fetchTasks
-                // fonksiyonunu çağırıyoruz. Sayfa yenilenmeden o kart tık diye yeni yerine geçiyor!
                 fetchTasks();
             });
         });
     }
 
-    // YENİ: İngilizce Çıkış Onayı Fonksiyonu
     function confirmLogout() {
         if (confirm("Are you sure you want to log out?")) {
             logout();
@@ -729,18 +724,38 @@
                 const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.fullName; selector.appendChild(opt);
             });
             activeUserId = selectId ? selectId : users[0].id; selector.value = activeUserId; updateUserCard(); fetchTasks();
-        }).catch(() => { logout(); });
+        }).catch(() => { /* GÜNCELLENDİ: Hata verirse direkt sistemden atmaması için logout kaldırıldı */ });
     }
 
+    // GÜNCELLENDİ: Profil Fotoğrafı (Avatar) Sistemi Kurşun Geçirmez Hale Getirildi
     function updateUserCard() {
-        const user = userList.find(u => u.id == activeUserId); if(!user) return;
+        const user = userList.find(u => u.id == activeUserId);
+        if(!user) return;
+
         document.getElementById('userProfileCard').style.display = 'block';
         document.getElementById('activeName').textContent = user.fullName;
+
         const avatarImg = document.getElementById('activeAvatar');
-        // Kırık olursa devredeki onerror html taginden halledecek
-        avatarImg.src = user.avatarUrl ? user.avatarUrl : `https://ui-avatars.com/api/?name=${user.fullName.replace(' ', '+')}&background=4f46e5&color=fff&bold=true`;
-        const level = user.level || 1; const reqXp = level * 100;
-        let title = "Junior"; if(level >= 3) title = "Mid-Level"; if(level >= 5) title = "Senior"; if(level >= 10) title = "Lead / Expert";
+
+        // 1. Dinamik, İsme Özel Garanti Resim Linki (Boşlukları %20 yaparak hataları önler)
+        const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=4f46e5&color=fff&bold=true&rounded=true`;
+
+        // 2. Eğer DB'den gelen resim yüklenemezse veya bulunamazsa DEVREYE GİRECEK SİGORTA KODU:
+        avatarImg.onerror = function() {
+            this.onerror = null; // Sonsuz döngüyü engelle
+            this.src = fallbackUrl; // Şık logoyu yapıştır
+        };
+
+        // 3. Resmi Ata (Varsa DB'dekini dener, patlarsa üstteki 'onerror' onu kurtarır)
+        avatarImg.src = user.avatarUrl ? user.avatarUrl : fallbackUrl;
+
+        const level = user.level || 1;
+        const reqXp = level * 100;
+        let title = "Junior";
+        if(level >= 3) title = "Mid-Level";
+        if(level >= 5) title = "Senior";
+        if(level >= 10) title = "Lead / Expert";
+
         document.getElementById('activeLevel').innerHTML = `Lvl. ${level} <span style="font-weight:normal; font-size:11px; margin-left:4px; opacity:0.8;">${title}</span>`;
         document.getElementById('xpText').textContent = `${user.xp || 0} / ${reqXp} XP`;
         document.getElementById('xpProgress').style.width = `${((user.xp || 0) / reqXp) * 100}%`;
@@ -751,18 +766,33 @@
     function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
     function dragTask(ev, taskId) { ev.dataTransfer.setData("taskId", taskId); ev.target.style.opacity = "0.5"; }
 
+    // GÜNCELLENDİ: Normal Kullanıcıların XP Güncellemesi Düzeltildi
     function dropTask(ev, newStatus) {
         ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
         const taskId = ev.dataTransfer.getData("taskId"); if(!taskId) return;
         const draggedElement = document.querySelector(`[ondragstart*="${taskId}"]`);
         const wasCompleted = draggedElement ? draggedElement.parentElement.id === 'col-COMPLETED' : false;
+
         fetchWithAuth('/tasks/update/' + taskId, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })
-            .then(() => {
-                if(newStatus === 'COMPLETED' && !wasCompleted) showToast('Task completed, XP earned! 🚀', 'success');
-                else if (wasCompleted && newStatus !== 'COMPLETED') showToast('Task reverted, XP deducted! 📉', 'danger');
-                fetchWithAuth('/auth/me').then(r => r.json()).then(user => {
-                    if(user.role === 'ROLE_ADMIN') fetchUsers(activeUserId); else fetchUsers(user.id);
-                });
+            .then(res => {
+                if(res.ok) {
+                    // TOAST Bildirimi (XP Kazanıldı / Düştü)
+                    if(newStatus === 'COMPLETED' && !wasCompleted) showToast('Task completed, XP earned! 🚀', 'success');
+                    else if (wasCompleted && newStatus !== 'COMPLETED') showToast('Task reverted, XP deducted! 📉', 'danger');
+
+                    // Sadece kullanıcının KENDİ verisini çek ve güncelle (403 yetki hatasını önler)
+                    fetchWithAuth('/auth/me').then(r => r.json()).then(user => {
+                        if(user.role === 'ROLE_ADMIN') {
+                            fetchUsers(activeUserId); // Admin yetkiliyse tüm listeyi yenile
+                        } else {
+                            // Normal kullanıcıysa sadece kendi bilgilerini listede ezip ekranı yenile
+                            loggedInUser = user;
+                            userList = [user];
+                            activeUserId = user.id;
+                            updateUserCard();
+                        }
+                    });
+                }
             });
     }
 
@@ -892,6 +922,7 @@
                 isFetchingTasks = false;
             });
     }
+
     document.getElementById('btnAddTask').addEventListener('click', function() {
         if(!activeUserId) return;
         const title = document.getElementById('newTaskTitle').value;
@@ -927,6 +958,7 @@
     });
 
     function deleteTask(id) { if(confirm("Are you sure you want to delete this task?")) fetchWithAuth('/tasks/delete/' + id, { method: 'DELETE' }).then(() => fetchTasks()); }
+
     function getAIRecommendation() {
         const selectedCategory = document.getElementById('newTaskCategory').value;
         fetchWithAuth(`/users/recommendation?category=${selectedCategory}`).then(res => res.json()).then(user => {
@@ -938,6 +970,7 @@
         });
     }
 
+    // GÜNCELLENDİ: Fotoğraf Yüklenince Ekranı Sorunsuz Güncelle
     function uploadAvatarFile(event) {
         const file = event.target.files[0]; if(!file) return;
         if(file.size > 2 * 1024 * 1024) { showToast("File is too large! Maximum 2MB allowed.", "danger"); event.target.value = ''; return; }
@@ -949,7 +982,7 @@
                     const newAvatarUrl = await res.text(); showToast("Profile picture updated!", "success");
                     if (loggedInUser && loggedInUser.id == activeUserId) loggedInUser.avatarUrl = newAvatarUrl;
                     const uIndex = userList.findIndex(u => u.id == activeUserId); if(uIndex !== -1) userList[uIndex].avatarUrl = newAvatarUrl;
-                    updateUserCard();
+                    updateUserCard(); // Ekranı anında güncelle
                 } else { showToast("Failed to upload image.", "danger"); }
             }).catch(() => { showToast("Server connection error!", "danger"); }).finally(() => { hideLoader(); event.target.value = ''; });
     }
