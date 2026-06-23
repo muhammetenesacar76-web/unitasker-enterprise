@@ -1,0 +1,8 @@
+POST http://localhost:8080/kullanici/1/gorev-ekle
+Content-Type: application/json
+
+{
+  "title": "Arayüz Tasarımlarını Çiz",
+  "description": "UniTasker için Figma üzerinden ekran tasarımları yapılacak.",
+  "status": "BEKLIYOR"
+}

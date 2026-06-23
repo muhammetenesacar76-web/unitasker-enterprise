@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UniTasker Enterprise Workspace</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- YENİ: WebSocket Kütüphaneleri -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #4f46e5; --primary-hover: #4338ca; --bg-color: #f3f4f6; --surface: #ffffff;
+            --text-main: #1f2937; --text-muted: #6b7280; --border: #e5e7eb;
+            --danger: #ef4444; --success: #10b981; --warning: #f59e0b; --ai-color: #a855f7;
+            --card-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0f172a; --surface: #1e293b; --text-main: #f8fafc; --text-muted: #94a3b8; --border: #334155;
+            --card-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background-color: var(--bg-color); margin: 0; color: var(--text-main); transition: background-color 0.3s, color 0.3s; }
+        .navbar { background: var(--surface); padding: 15px 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .navbar h1 { margin: 0; font-size: 22px; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .theme-toggle-btn { background: none; border: 1px solid var(--border); color: var(--text-main); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+
+        .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 99999; display: flex; justify-content: center; align-items: center; transition: 0.3s; }
+        .auth-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        .auth-card { background: var(--surface); padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 1px solid var(--border); width: 350px; text-align: center; }
+        .auth-card h2 { margin-top: 0; color: var(--primary); margin-bottom: 25px; }
+        .auth-switch { color: var(--text-muted); font-size: 13px; margin-top: 20px; cursor: pointer; transition: 0.2s; }
+        .auth-switch:hover { color: var(--primary); text-decoration: underline; }
+
+        .dashboard-container { display: grid; grid-template-columns: 320px 1fr; gap: 25px; padding: 30px 40px; max-width: 1500px; margin: auto; transition: 0.3s; }
+        .dashboard-container.hidden { opacity: 0; visibility: hidden; display: none; }
+
+        .card { background: var(--surface); padding: 25px; border-radius: 12px; box-shadow: var(--card-shadow); border: 1px solid var(--border); }
+        .card-title { font-size: 16px; font-weight: 600; margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-muted); }
+        input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-color); color: var(--text-main); box-sizing: border-box; }
+        button { padding: 10px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; }
+        .btn-icon { background: none; color: var(--text-muted); padding: 8px; font-size: 16px; border: 1px solid var(--border); border-radius: 6px; }
+        .btn-icon.danger:hover { color: var(--danger); border-color: var(--danger); }
+
+        .avatar-container { position: relative; display: inline-block; transition: 0.2s; }
+        .avatar-overlay { position: absolute; bottom: -2px; right: -2px; background: var(--primary); color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; justify-content: center; align-items: center; font-size: 11px; border: 2px solid var(--surface); box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; }
+        .avatar-overlay:hover { transform: scale(1.1); }
+        .user-avatar { width: 50px; height: 50px; border-radius: 50%; border: 2px solid var(--surface); object-fit: cover; background: var(--border); cursor: zoom-in; }
+
+        .xp-container { width: 100%; margin-bottom: 15px; }
+        .xp-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+        .xp-bar { width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+        .xp-progress { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 4px; transition: width 0.6s; }
+        .chart-container { background: var(--surface); padding: 10px; border-radius: 8px; border: 1px solid var(--border); display: flex; justify-content: center; align-items: center; height: 180px; margin-bottom: 15px; }
+
+        .task-input-row { display: grid; grid-template-columns: 1.2fr 1.5fr 1fr 1fr 1fr auto auto; gap: 12px; align-items: end; background: var(--bg-color); padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px dashed var(--border); }
+        .filter-bar { display: flex; gap: 15px; align-items: flex-end; background: var(--surface); padding: 15px 20px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 20px; box-shadow: var(--card-shadow); }
+        .filter-bar .form-group { margin: 0; flex: 1; }
+
+        .kanban-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; min-height: 400px; }
+        .kanban-column { background: var(--bg-color); border: 1px solid var(--border); border-radius: 10px; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+        .kanban-column.drag-over { background: #e0e7ff; border: 2px dashed var(--primary); }
+        .kanban-header { font-size: 14px; font-weight: 600; color: var(--text-muted); padding-bottom: 10px; border-bottom: 2px solid var(--border); display: flex; justify-content: space-between; }
+
+        .task-item { background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); cursor: grab; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
+        .task-item:hover { box-shadow: var(--card-shadow); border-color: var(--primary); }
+
+        .task-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block; padding-right: 70px; }
+        .task-desc { font-size: 11.5px; color: var(--text-muted); font-style: italic; margin-bottom: 12px; display: block; line-height: 1.4; border-left: 2px solid var(--border); padding-left: 8px; }
+
+        .task-meta { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px; }
+        .meta-row { display: flex; justify-content: space-between; align-items: center; }
+        .badge { padding: 3px 8px; border-radius: 12px; font-weight: 600; font-size: 10px; display: inline-flex; align-items: center; gap: 4px; }
+        .badge-yuksek { background: #fee2e2; color: var(--danger); }
+        .badge-orta { background: #fef3c7; color: var(--warning); }
+        .badge-dusuk { background: #d1fae5; color: var(--success); }
+        .badge-cat { background: #e0e7ff; color: var(--primary); }
+        [data-theme="dark"] .badge-cat { background: #312e81; color: #c7d2fe; }
+
+        .delete-btn { position: absolute; top: 8px; right: 8px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 6px; z-index: 2; }
+        .edit-btn { position: absolute; top: 8px; right: 40px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 6px; z-index: 2; }
+        .history-btn { position: absolute; top: 8px; right: 72px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 6px; z-index: 2; }
+        .edit-btn:hover { color: var(--primary); }
+        .delete-btn:hover { color: var(--danger); }
+        .history-btn:hover { color: var(--warning); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 10000; opacity: 0; visibility: hidden; transition: 0.3s; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .ai-modal { background: var(--surface); padding: 30px; border-radius: 16px; width: 450px; max-height: 90vh; overflow-y: auto; text-align: left; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); border: 2px solid var(--border); transform: scale(0.9); transition: 0.3s; }
+        .modal-overlay.active .ai-modal { transform: scale(1); }
+
+        .subtask-list { list-style: none; padding: 0; margin: 15px 0; }
+        .subtask-item { display: flex; justify-content: space-between; align-items: center; background: var(--bg-color); padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border); font-size: 13px; }
+        .subtask-item.completed { text-decoration: line-through; opacity: 0.6; }
+        .subtask-input-row { display: flex; gap: 10px; margin-top: 10px; }
+
+        .history-list { list-style: none; padding: 0; margin: 0; border-left: 2px solid var(--border); padding-left: 15px; }
+        .history-item { margin-bottom: 15px; position: relative; font-size: 13px; }
+        .history-item::before { content: ''; position: absolute; left: -21px; top: 4px; width: 10px; height: 10px; background: var(--primary); border-radius: 50%; }
+        .history-time { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 2px; }
+
+        .btn-ai-confirm { background: linear-gradient(135deg, var(--ai-color), #7e22ce); color: white; width: 100%; padding: 12px; font-size: 15px; border-radius: 8px; border: none; cursor: pointer; }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 99999999; }
+        .toast { background: var(--surface); color: var(--text-main); padding: 14px 22px; border-radius: 10px; border-left: 5px solid var(--primary); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(130%); transition: transform 0.3s; font-size: 14px; font-weight: 600; }
+        .toast.show { transform: translateX(0); }
+        .toast.success { border-left-color: var(--success); }
+        .toast.danger { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+        .toast.ai { border-left-color: var(--ai-color); }
+    </style>
+</head>
+<body>
+
+<div id="globalLoader" class="modal-overlay" style="z-index: 999999999; display: none; flex-direction: column; gap: 15px; background: rgba(0,0,0,0.7); position: fixed; top: 0; left: 0; width: 100%; height: 100%; justify-content: center; align-items: center;">
+    <div style="width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <span style="color: white; font-weight: bold; letter-spacing: 1px;">Processing...</span>
+    <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+</div>
+
+<div id="authScreen" class="auth-overlay">
+    <div class="auth-card" id="loginBox">
+        <h2><i class="fa-solid fa-fingerprint"></i> System Login</h2>
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="loginEmail" placeholder="admin@unitasker.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" onclick="login()"><i class="fa-solid fa-right-to-bracket"></i> Login to Workspace</button>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <p class="auth-switch" style="margin:0;" onclick="switchAuthMode('forgot')">Forgot Password?</p>
+            <p class="auth-switch" style="margin:0;" onclick="switchAuthMode('register')">Create Account</p>
+        </div>
+    </div>
+
+    <div class="auth-card" id="registerBox" style="display: none;">
+        <h2><i class="fa-solid fa-user-plus"></i> Create Account</h2>
+        <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="regName" placeholder="John Doe">
+        </div>
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="regEmail" placeholder="john@example.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPassword" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" onclick="register()"><i class="fa-solid fa-check"></i> Register</button>
+        <p class="auth-switch" onclick="switchAuthMode('login')">Already have an account? Login</p>
+    </div>
+
+    <div class="auth-card" id="otpBox" style="display: none;">
+        <h2><i class="fa-solid fa-envelope-circle-check"></i> Verify Email</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">We sent a 6-digit code to your email.</p>
+        <p id="otpTimerDisplay" style="font-size: 15px; font-weight: bold; color: var(--danger); margin-bottom: 20px;">03:00</p>
+        <div class="form-group">
+            <input type="text" id="otpInput" placeholder="Enter 6-digit code" style="text-align: center; font-size: 20px; letter-spacing: 5px; font-weight: bold;">
+        </div>
+        <button class="btn-primary" id="btnVerifyOTP" onclick="verifyOTP()"><i class="fa-solid fa-check-double"></i> Verify & Login</button>
+        <p class="auth-switch" onclick="switchAuthMode('login')">Cancel</p>
+    </div>
+
+    <div class="auth-card" id="forgotBox" style="display: none;">
+        <h2><i class="fa-solid fa-unlock-keyhole"></i> Reset Password</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Enter your registered email to receive a reset code.</p>
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="forgotEmail" placeholder="yourname@example.com">
+        </div>
+        <button class="btn-primary" onclick="requestResetCode()"><i class="fa-solid fa-paper-plane"></i> Send Reset Code</button>
+        <p class="auth-switch" onclick="switchAuthMode('login')">Back to Login</p>
+    </div>
+
+    <div class="auth-card" id="resetBox" style="display: none;">
+        <h2><i class="fa-solid fa-key"></i> Set New Password</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Enter the 6-digit code sent to your email and your new password.</p>
+        <div class="form-group">
+            <label>6-Digit Reset Code</label>
+            <input type="text" id="resetCodeInput" placeholder="000000" style="text-align: center; font-weight: bold; letter-spacing: 3px;">
+        </div>
+        <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="resetNewPassword" placeholder="••••••••">
+        </div>
+        <button class="btn-primary" onclick="submitNewPassword()"><i class="fa-solid fa-shield-halved"></i> Save New Password</button>
+        <p class="auth-switch" onclick="switchAuthMode('login')">Cancel</p>
+    </div>
+</div>
+
+<div class="modal-overlay" id="imageModalOverlay" onclick="closeImageModal()">
+    <div class="ai-modal" style="text-align: center; width: auto; max-width: 80vw; background: none; border: none; box-shadow: none;" onclick="event.stopPropagation()">
+        <img src="" id="zoomedImage" style="max-width: 100%; max-height: 70vh; border-radius: 16px; border: 4px solid white; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+        <br><br>
+        <button class="btn-primary" style="width: auto; padding: 8px 25px; margin: auto;" onclick="closeImageModal()">Close</button>
+    </div>
+</div>
+
+<div class="navbar">
+    <h1><i class="fa-solid fa-brain"></i> UniTasker Enterprise Workspace</h1>
+    <div style="display: flex; gap: 10px;">
+        <button class="theme-toggle-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="themeIcon"></i></button>
+        <button class="btn-icon danger" onclick="logout()" title="Logout" style="border: 1px solid var(--border);"><i class="fa-solid fa-power-off"></i></button>
+    </div>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<div class="modal-overlay" id="historyModalOverlay">
+    <div class="ai-modal">
+        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+            <i class="fa-solid fa-clock-rotate-left" style="color: var(--warning);"></i> Task History (Audit Logs)
+        </h3>
+        <ul class="history-list" id="historyLogContainer"></ul>
+        <button class="btn-icon" style="border: 1px solid var(--border); padding: 12px; width: 100%; border-radius: 8px; margin-top: 20px;" onclick="closeHistoryModal()">Close</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="editModalOverlay">
+    <div class="ai-modal" style="border-color: var(--primary);">
+        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+            <i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Edit Task
+        </h3>
+        <input type="hidden" id="editTaskId">
+        <div class="form-group">
+            <label>Task Title</label>
+            <input type="text" id="editTitle">
+        </div>
+        <div class="form-group">
+            <label>Details (Optional)</label>
+            <input type="text" id="editDesc">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label>Category</label>
+                <select id="editCat">
+                    <option value="SOFTWARE">💻 Software & Tech</option>
+                    <option value="ACADEMIC">📚 Academic & Research</option>
+                    <option value="FINANCE">💰 Crypto & Finance</option>
+                    <option value="GAMING">🎮 Esports & Gaming</option>
+                    <option value="FITNESS">💪 Sports & Fitness</option>
+                    <option value="SOCIAL">🤝 Communication & Social</option>
+                    <option value="ART">🎨 Creativity & Design</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Priority</label>
+                <select id="editPrio">
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High (Critical)</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 25px;">
+            <label>Due Date</label>
+            <input type="date" id="editDate">
+        </div>
+        <div style="border-top: 1px dashed var(--border); padding-top: 15px;">
+            <label><i class="fa-solid fa-list-check"></i> Subtasks (Checklist)</label>
+            <ul class="subtask-list" id="editSubtaskList"></ul>
+            <div class="subtask-input-row">
+                <input type="text" id="newSubtaskTitle" placeholder="Add a new subtask...">
+                <button class="btn-primary" style="width: auto;" onclick="addSubTask()"><i class="fa-solid fa-plus"></i></button>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 25px;">
+            <button class="btn-icon" style="border: 1px solid var(--border); padding: 12px; border-radius: 8px;" onclick="closeEditModal()">Cancel</button>
+            <button class="btn-primary" onclick="saveTaskEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="aiModalOverlay">
+    <div class="ai-modal" style="text-align: center;">
+        <div class="ai-icon-wrapper"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+        <h3>AI Analysis</h3>
+        <p id="aiModalMessage">Identifying category expert...</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
+            <button class="btn-icon" style="border: 1px solid var(--border); padding: 12px; width: 100%; border-radius: 8px;" onclick="closeAIModal()">Keep Current</button>
+            <button class="btn-ai-confirm" id="btnAiConfirm">Select Expert</button>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-container" id="dashboardContent">
+    <div class="left-sidebar">
+        <div class="card" style="margin-bottom: 25px; padding: 20px;">
+            <h2 class="card-title"><i class="fa-solid fa-user-astronaut"></i> Active Workspace</h2>
+            <div class="form-group" id="adminWorkspaceSelector" style="display: none;">
+                <label><i class="fa-solid fa-users-gear"></i> Admin: Switch Workspace</label>
+                <select id="userSelector" onchange="onUserChange()"></select>
+            </div>
+
+            <div class="user-profile" id="userProfileCard" style="display: none;">
+                <div class="profile-header">
+                    <div class="avatar-container" title="Profile Options">
+                        <img src="" id="activeAvatar" class="user-avatar" alt="Avatar" onclick="zoomProfilePicture()">
+                        <div class="avatar-overlay" onclick="document.getElementById('avatarUploadInput').click()" title="Upload Photo">
+                            <i class="fa-solid fa-camera"></i>
+                        </div>
+                    </div>
+                    <input type="file" id="avatarUploadInput" style="display: none;" accept="image/png, image/jpeg, image/jpg" onchange="uploadAvatarFile(event)">
+
+                    <div class="user-details">
+                        <p class="user-name"><span id="activeName">-</span> <span class="level-badge" id="activeLevel">Lvl. 1</span></p>
+                    </div>
+                </div>
+                <div class="xp-container">
+                    <div class="xp-info"><span>Performance XP</span><span id="xpText">0 / 100</span></div>
+                    <div class="xp-bar"><div class="xp-progress" id="xpProgress"></div></div>
+                </div>
+                <div class="chart-container"><canvas id="performanceChart"></canvas></div>
+                <button class="btn-primary" style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary);" onclick="exportPDFReport()">
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="card">
+            <div class="task-input-row">
+                <div class="form-group" style="margin: 0;">
+                    <label>Task Title</label>
+                    <input type="text" id="newTaskTitle" placeholder="What needs to be done?">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label>Details (Optional)</label>
+                    <input type="text" id="newTaskDesc" placeholder="Short note...">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label>Category</label>
+                    <select id="newTaskCategory">
+                        <option value="SOFTWARE">💻 Software & Tech</option>
+                        <option value="ACADEMIC">📚 Academic & Research</option>
+                        <option value="FINANCE">💰 Crypto & Finance</option>
+                        <option value="GAMING">🎮 Esports & Gaming</option>
+                        <option value="FITNESS">💪 Sports & Fitness</option>
+                        <option value="SOCIAL">🤝 Communication & Social</option>
+                        <option value="ART">🎨 Creativity & Design</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label>Priority</label>
+                    <select id="newTaskPriority">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM" selected>Medium</option>
+                        <option value="HIGH">High (Critical)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label>Due Date</label>
+                    <input type="date" id="newTaskDate">
+                </div>
+                <button class="btn-primary" id="btnAiRecommend" onclick="getAIRecommendation()" title="Find Category Expert" style="background: var(--ai-color); height: 40px; display: none;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> AI
+                </button>
+                <button class="btn-primary" id="btnAddTask" style="height: 40px;"><i class="fa-solid fa-plus"></i></button>
+            </div>
+
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-filter"></i> Filter by Category</label>
+                    <select id="filterCategory" onchange="applyFilters()">
+                        <option value="ALL">All Categories</option>
+                        <option value="SOFTWARE">Software & Tech</option>
+                        <option value="ACADEMIC">Academic & Research</option>
+                        <option value="FINANCE">Crypto & Finance</option>
+                        <option value="GAMING">Esports & Gaming</option>
+                        <option value="FITNESS">Sports & Fitness</option>
+                        <option value="SOCIAL">Communication & Social</option>
+                        <option value="ART">Creativity & Design</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-bolt"></i> Filter by Priority</label>
+                    <select id="filterPriority" onchange="applyFilters()">
+                        <option value="ALL">All Priorities</option>
+                        <option value="HIGH">High Priority</option>
+                        <option value="MEDIUM">Medium Priority</option>
+                        <option value="LOW">Low Priority</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="kanban-board">
+                <div class="kanban-column" ondrop="dropTask(event, 'PENDING')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+                    <div class="kanban-header"><span><i class="fa-solid fa-list-ul"></i> Pending</span><span id="count-PENDING">0</span></div>
+                    <div id="col-PENDING" style="min-height: 200px; display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div class="kanban-column" ondrop="dropTask(event, 'IN_PROGRESS')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+                    <div class="kanban-header"><span style="color: var(--warning)"><i class="fa-solid fa-person-digging"></i> In Progress</span><span id="count-IN_PROGRESS">0</span></div>
+                    <div id="col-IN_PROGRESS" style="min-height: 200px; display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div class="kanban-column" ondrop="dropTask(event, 'COMPLETED')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+                    <div class="kanban-header"><span style="color: var(--success)"><i class="fa-solid fa-check-double"></i> Completed</span><span id="count-COMPLETED">0</span></div>
+                    <div id="col-COMPLETED" style="min-height: 200px; display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeUserId = null;
+    let userList = [];
+    let currentTasks = [];
+    let performanceChartInstance = null;
+    let jwtToken = localStorage.getItem('jwtToken');
+
+    let pendingVerificationEmail = "";
+    let loggedInUser = null;
+    let stompClient = null; // Canlı yayın radyosu değişkeni
+    let otpInterval = null;
+
+    function showLoader() { document.getElementById('globalLoader').style.display = 'flex'; }
+    function hideLoader() { setTimeout(() => { document.getElementById('globalLoader').style.display = 'none'; }, 400); }
+
+    // YENİ: Profil Fotoğrafı Büyütme Fonksiyonları
+    function zoomProfilePicture() {
+        const src = document.getElementById('activeAvatar').src;
+        document.getElementById('zoomedImage').src = src;
+        document.getElementById('imageModalOverlay').classList.add('active');
+    }
+    function closeImageModal() { document.getElementById('imageModalOverlay').classList.remove('active'); }
+
+    function fetchWithAuth(url, options = {}) {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken };
+        return fetch(url, { ...options, headers });
+    }
+
+    // GÜNCELLENDİ: Giriş yapınca canlı yayın bağlantısını (WebSocket) başlat
+    function checkAuth() {
+        if(jwtToken) {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+
+            fetchWithAuth('/auth/me')
+                .then(res => res.json())
+                .then(user => {
+                    loggedInUser = user;
+                    connectWebSocket(user.id);
+
+                    if(user.role === 'ROLE_ADMIN') {
+                        document.getElementById('adminWorkspaceSelector').style.display = 'block';
+                        document.getElementById('btnAiRecommend').style.display = 'inline-flex'; // YENİ: Admin ise butonu göster
+                        fetchUsers();
+                    } else {
+                        document.getElementById('adminWorkspaceSelector').style.display = 'none';
+                        document.getElementById('btnAiRecommend').style.display = 'none'; // YENİ: Değilse gizle
+                        activeUserId = user.id;
+                        userList = [user];
+                        updateUserCard();
+                        fetchTasks();
+                    }
+                }).catch(() => { logout(); });
+        } else {
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.add('hidden');
+        }
+    }
+
+    // YENİ: Sunucuyla canlı soket bağlantısı kuran fonksiyon
+    function connectWebSocket(userId) {
+        const socket = new SockJS('/ws'); // Gizli kapıya git
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null; // Konsolu mesaj yağmurundan temizle
+
+        stompClient.connect({}, function (frame) {
+            console.log('Canlı Bildirim Sistemine Bağlanıldı!');
+
+            // Sadece bu kullanıcının ID'sine ait frekansı dinle
+            stompClient.subscribe('/topic/notifications/' + userId, function (notification) {
+                // Sunucudan mesaj gelirse sağ alttan (mavi renkle) Toast fırlat!
+                showToast(notification.body, "ai");
+
+                // Mesaj gelince, sayfayı yenilemeden görevleri tekrar çekip ekrana diz
+                if (activeUserId == userId) {
+                    fetchTasks();
+                }
+            });
+        });
+    }
+
+    // GÜNCELLENDİ: Çıkış yaparken yayını kes
+    function logout() {
+        if (stompClient !== null) { stompClient.disconnect(); }
+        localStorage.removeItem('jwtToken');
+        jwtToken = null;
+        clearInterval(otpInterval);
+        checkAuth();
+        showToast("Logged out successfully.", "warning");
+    }
+
+    // GÜNCELLENDİ: Yeni şifre pencereleri eklendi
+    function switchAuthMode(mode) {
+        document.getElementById('loginBox').style.display = 'none';
+        document.getElementById('registerBox').style.display = 'none';
+        document.getElementById('otpBox').style.display = 'none';
+        document.getElementById('forgotBox').style.display = 'none';
+        document.getElementById('resetBox').style.display = 'none';
+
+        if(mode === 'register') document.getElementById('registerBox').style.display = 'block';
+        else if (mode === 'otp') document.getElementById('otpBox').style.display = 'block';
+        else if (mode === 'forgot') document.getElementById('forgotBox').style.display = 'block';
+        else if (mode === 'reset') document.getElementById('resetBox').style.display = 'block';
+        else document.getElementById('loginBox').style.display = 'block';
+    }
+
+    function startOTPTimer() {
+        let timeLeft = 180;
+        document.getElementById('otpTimerDisplay').innerText = `03:00`;
+        document.getElementById('otpTimerDisplay').style.color = "var(--danger)";
+        document.getElementById('btnVerifyOTP').disabled = false;
+        clearInterval(otpInterval);
+        otpInterval = setInterval(() => {
+            timeLeft--;
+            let m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            let s = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('otpTimerDisplay').innerText = `${m}:${s}`;
+            if(timeLeft <= 0) {
+                clearInterval(otpInterval);
+                document.getElementById('otpTimerDisplay').innerText = "Code expired!";
+                document.getElementById('btnVerifyOTP').disabled = true;
+            }
+        }, 1000);
+    }
+
+    function register() {
+        const name = document.getElementById('regName').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        if(!name || !email || !password) { showToast("Please fill all fields!", "danger"); return; }
+
+        showLoader();
+        fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullName: name, email: email, password: password }) })
+            .then(async res => {
+                const msg = await res.text();
+                if(res.ok) {
+                    if (msg === "ADMIN_CREATED") {
+                        showToast("Admin account created! You can login instantly.", "success");
+                        document.getElementById('loginEmail').value = email;
+                        switchAuthMode('login');
+                    } else if (msg === "OTP_SENT") {
+                        showToast("Code sent! Check your email.", "success");
+                        pendingVerificationEmail = email;
+                        switchAuthMode('otp');
+                        startOTPTimer();
+                    }
+                } else { showToast(msg || "Registration failed.", "danger"); }
+            }).catch(err => { showToast("Server connection error!", "danger"); })
+            .finally(() => hideLoader());
+    }
+
+    // YENİ: Şifre Yenileme Kod Talebi
+    function requestResetCode() {
+        const email = document.getElementById('forgotEmail').value.trim();
+        if(!email) { showToast("Please enter your email!", "danger"); return; }
+
+        showLoader();
+        fetch('/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) })
+            .then(async res => {
+                if(res.ok) {
+                    showToast("Reset code sent! Check your email.", "success");
+                    pendingVerificationEmail = email;
+                    switchAuthMode('reset'); // Yeni şifre kurma kutusuna at
+                } else {
+                    const text = await res.text();
+                    showToast(text || "Email not found.", "danger");
+                }
+            }).catch(() => showToast("Server error!", "danger"))
+            .finally(() => hideLoader());
+    }
+
+    // YENİ: Kodu ve Yeni Şifreyi Kaydetme
+    function submitNewPassword() {
+        const code = document.getElementById('resetCodeInput').value.trim();
+        const newPassword = document.getElementById('resetNewPassword').value;
+        if(!code || !newPassword) { showToast("Please fill all fields!", "danger"); return; }
+
+        showLoader();
+        fetch('/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pendingVerificationEmail, code: code, newPassword: newPassword }) })
+            .then(async res => {
+                if(res.ok) {
+                    showToast("Password updated successfully! Please login.", "success");
+                    document.getElementById('loginEmail').value = pendingVerificationEmail;
+                    document.getElementById('loginPassword').value = '';
+                    switchAuthMode('login');
+                } else {
+                    showToast("Invalid or expired code!", "danger");
+                }
+            }).catch(() => showToast("Server error!", "danger"))
+            .finally(() => hideLoader());
+    }
+
+    function verifyOTP() {
+        const code = document.getElementById('otpInput').value.trim();
+        if(!code) { showToast("Please enter the code!", "danger"); return; }
+        showLoader();
+        fetch('/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pendingVerificationEmail, code: code }) })
+            .then(async res => {
+                if(res.ok) {
+                    clearInterval(otpInterval);
+                    showToast("Verified successfully!", "success");
+                    document.getElementById('loginEmail').value = pendingVerificationEmail;
+                    switchAuthMode('login');
+                } else { showToast("Invalid or expired code!", "danger"); }
+            }).catch(err => { showToast("Server error!", "danger"); })
+            .finally(() => hideLoader());
+    }
+
+    function login() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        if(!email || !password) { showToast("Please enter email and password!", "danger"); return; }
+
+        showLoader();
+        fetch('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: password }) })
+            .then(async res => {
+                const responseText = await res.text();
+                if(res.ok) {
+                    jwtToken = responseText; localStorage.setItem('jwtToken', jwtToken);
+                    showToast("Logged in successfully!", "success"); checkAuth();
+                } else if (res.status === 403 && responseText === "NEEDS_VERIFICATION") {
+                    showToast("Please verify your email first!", "warning");
+                    pendingVerificationEmail = email;
+                    switchAuthMode('otp');
+                    startOTPTimer();
+                } else { showToast(responseText || "Invalid credentials!", "danger"); }
+            }).catch(err => { showToast("Server connection error!", "danger"); })
+            .finally(() => hideLoader());
+    }
+
+    function logout() {
+        localStorage.removeItem('jwtToken');
+        jwtToken = null;
+        clearInterval(otpInterval);
+        checkAuth();
+        showToast("Logged out successfully.", "warning");
+    }
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<i class="fa-solid ${type === 'ai' ? 'fa-wand-magic-sparkles' : 'fa-bell'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.add('show'), 50);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    function toggleTheme() {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        document.getElementById('themeIcon').className = newTheme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        if(performanceChartInstance) fetchTasks();
+    }
+
+    function closeAIModal() { document.getElementById('aiModalOverlay').classList.remove('active'); }
+    function closeEditModal() { document.getElementById('editModalOverlay').classList.remove('active'); }
+    function closeHistoryModal() { document.getElementById('historyModalOverlay').classList.remove('active'); }
+
+    function exportPDFReport() {
+        if(!currentTasks || currentTasks.length === 0) { showToast("No tasks available to export.", "warning"); return; }
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        const userName = document.getElementById('activeName').textContent;
+        const userLevel = document.getElementById('activeLevel').textContent;
+        doc.setFontSize(18); doc.text("Enterprise Workspace Report", 14, 20);
+        doc.setFontSize(12); doc.text(`Generated for: ${userName} (${userLevel})`, 14, 30); doc.text(`Date: ${new Date().toLocaleDateString('en-US')}`, 14, 38);
+        const tableColumn = ["Task Title", "Category", "Priority", "Status", "Due Date", "Checklists"];
+        const tableRows = [];
+        currentTasks.forEach(t => {
+            const dateStr = t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-US') : 'No Date';
+            const checklistStr = t.subTasks ? `${t.subTasks.filter(st => st.completed).length} / ${t.subTasks.length}` : '0 / 0';
+            tableRows.push([t.title, t.category, t.priority, t.status, dateStr, checklistStr]);
+        });
+        doc.autoTable({ head: [tableColumn], body: tableRows, startY: 45, theme: 'striped', headStyles: { fillColor: [79, 70, 229] } });
+        doc.save(`${userName.replace(' ', '_')}_Task_Report.pdf`);
+        showToast("PDF Report successfully generated!", "success");
+    }
+
+    function openHistoryModal(taskId) {
+        const task = currentTasks.find(t => t.id == taskId); if(!task) return;
+        const container = document.getElementById('historyLogContainer'); container.innerHTML = '';
+        if(!task.auditLogs || task.auditLogs.length === 0) {
+            container.innerHTML = '<li class="history-item" style="color:var(--text-muted);">No history available.</li>';
+        } else {
+            task.auditLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(log => {
+                const date = new Date(log.timestamp);
+                const dateStr = `${date.toLocaleDateString('en-US')} - ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                container.innerHTML += `<li class="history-item"><span class="history-time">${dateStr}</span>${log.action}</li>`;
+            });
+        }
+        document.getElementById('historyModalOverlay').classList.add('active');
+    }
+
+    function updateChart(tasks) {
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const textColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#94a3b8' : '#6b7280';
+        const gridColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#e5e7eb';
+        if (performanceChartInstance) performanceChartInstance.destroy();
+        const catStats = { "SOFTWARE":0, "ACADEMIC":0, "FINANCE":0, "GAMING":0, "FITNESS":0, "SOCIAL":0, "ART":0 };
+        let hasData = false;
+        tasks.forEach(t => { if(t.status === 'COMPLETED' && catStats[t.category] !== undefined) { catStats[t.category]++; hasData = true; } });
+        if(!hasData) return;
+        performanceChartInstance = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Software', 'Academic', 'Finance', 'Gaming', 'Fitness', 'Social', 'Design'],
+                datasets: [{ label: 'Completed Tasks', data: [catStats["SOFTWARE"], catStats["ACADEMIC"], catStats["FINANCE"], catStats["GAMING"], catStats["FITNESS"], catStats["SOCIAL"], catStats["ART"]], backgroundColor: 'rgba(79, 70, 229, 0.3)', borderColor: '#4f46e5', pointBackgroundColor: '#10b981', borderWidth: 2 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { r: { angleLines: { color: gridColor }, grid: { color: gridColor }, pointLabels: { color: textColor, font: { size: 10 } }, ticks: { display: false, stepSize: 1 } } }, plugins: { legend: { display: false } } }
+        });
+    }
+
+    function fetchUsers(selectId = null) {
+        fetchWithAuth('/users').then(res => res.json()).then(users => {
+            userList = users; const selector = document.getElementById('userSelector'); selector.innerHTML = '';
+            if(users.length === 0) { document.getElementById('userProfileCard').style.display = 'none'; return; }
+            users.forEach(u => {
+                const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.fullName; selector.appendChild(opt);
+            });
+            activeUserId = selectId ? selectId : users[0].id; selector.value = activeUserId; updateUserCard(); fetchTasks();
+        }).catch(() => { logout(); });
+    }
+
+    function updateUserCard() {
+        const user = userList.find(u => u.id == activeUserId); if(!user) return;
+        document.getElementById('userProfileCard').style.display = 'block';
+        document.getElementById('activeName').textContent = user.fullName;
+        const avatarImg = document.getElementById('activeAvatar');
+        avatarImg.src = user.avatarUrl ? user.avatarUrl : `https://ui-avatars.com/api/?name=${user.fullName.replace(' ', '+')}&background=4f46e5&color=fff&bold=true`;
+        const level = user.level || 1; const reqXp = level * 100;
+        let title = "Junior"; if(level >= 3) title = "Mid-Level"; if(level >= 5) title = "Senior"; if(level >= 10) title = "Lead / Expert";
+        document.getElementById('activeLevel').innerHTML = `Lvl. ${level} <span style="font-weight:normal; font-size:11px; margin-left:4px; opacity:0.8;">${title}</span>`;
+        document.getElementById('xpText').textContent = `${user.xp || 0} / ${reqXp} XP`;
+        document.getElementById('xpProgress').style.width = `${((user.xp || 0) / reqXp) * 100}%`;
+    }
+
+    function onUserChange() { activeUserId = document.getElementById('userSelector').value; updateUserCard(); fetchTasks(); }
+    function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
+    function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
+    function dragTask(ev, taskId) { ev.dataTransfer.setData("taskId", taskId); ev.target.style.opacity = "0.5"; }
+
+    function dropTask(ev, newStatus) {
+        ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
+        const taskId = ev.dataTransfer.getData("taskId"); if(!taskId) return;
+        const draggedElement = document.querySelector(`[ondragstart*="${taskId}"]`);
+        const wasCompleted = draggedElement ? draggedElement.parentElement.id === 'col-COMPLETED' : false;
+        fetchWithAuth('/tasks/update/' + taskId, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })
+            .then(() => {
+                if(newStatus === 'COMPLETED' && !wasCompleted) showToast('Task completed, XP earned! 🚀', 'success');
+                else if (wasCompleted && newStatus !== 'COMPLETED') showToast('Task reverted, XP deducted! 📉', 'danger');
+                fetchWithAuth('/auth/me').then(r => r.json()).then(user => {
+                    if(user.role === 'ROLE_ADMIN') fetchUsers(activeUserId); else fetchUsers(user.id);
+                });
+            });
+    }
+
+    function getCategoryBadge(cat) {
+        const cats = { "SOFTWARE": "💻 Software", "ACADEMIC": "📚 Academic", "FINANCE": "💰 Finance", "GAMING": "🎮 Gaming", "FITNESS": "💪 Fitness", "SOCIAL": "🤝 Social", "ART": "🎨 Art" };
+        return `<span class="badge badge-cat">${cats[cat] || cat}</span>`;
+    }
+    function getPriorityBadge(p) {
+        if(p === 'HIGH') return '<span class="badge badge-yuksek">High</span>';
+        if(p === 'MEDIUM') return '<span class="badge badge-orta">Medium</span>';
+        return '<span class="badge badge-dusuk">Low</span>';
+    }
+
+    function openEditTaskModal(id) {
+        const task = currentTasks.find(t => t.id == id); if(!task) return;
+        document.getElementById('editTaskId').value = task.id; document.getElementById('editTitle').value = task.title || '';
+        document.getElementById('editDesc').value = task.description || ''; document.getElementById('editCat').value = task.category;
+        document.getElementById('editPrio').value = task.priority; document.getElementById('editDate').value = task.dueDate ? task.dueDate.split('T')[0] : '';
+        renderSubtasks(task.id); document.getElementById('editModalOverlay').classList.add('active');
+    }
+
+    function renderSubtasks(taskId) {
+        const task = currentTasks.find(t => t.id == taskId); const list = document.getElementById('editSubtaskList'); list.innerHTML = '';
+        if(!task || !task.subTasks || task.subTasks.length === 0) { list.innerHTML = '<li style="font-size:12px; color:var(--text-muted); font-style:italic;">No subtasks added yet.</li>'; return; }
+        task.subTasks.forEach(st => {
+            const isChecked = st.completed ? "checked" : ""; const isStrikethrough = st.completed ? "completed" : "";
+            list.innerHTML += `<li class="subtask-item ${isStrikethrough}"><label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer;"><input type="checkbox" ${isChecked} onchange="toggleSubTask(${st.id})"><span>${st.title}</span></label></li>`;
+        });
+    }
+
+    function addSubTask() {
+        const taskId = document.getElementById('editTaskId').value; const input = document.getElementById('newSubtaskTitle'); const title = input.value.trim(); if(title === '') return;
+        fetchWithAuth(`/tasks/${taskId}/subtasks/add`, { method: 'POST', body: JSON.stringify({ title: title, completed: false }) })
+            .then(res => { if(res.ok) { input.value = ''; fetchTasks().then(() => renderSubtasks(taskId)); showToast("Subtask added.", "success"); } });
+    }
+    function toggleSubTask(subTaskId) {
+        const taskId = document.getElementById('editTaskId').value;
+        fetchWithAuth(`/tasks/subtasks/${subTaskId}/toggle`, { method: 'PUT' }).then(() => { fetchTasks().then(() => renderSubtasks(taskId)); });
+    }
+
+    function saveTaskEdit() {
+        const id = document.getElementById('editTaskId').value;
+        const data = { title: document.getElementById('editTitle').value, description: document.getElementById('editDesc').value, category: document.getElementById('editCat').value, priority: document.getElementById('editPrio').value, dueDate: document.getElementById('editDate').value || null };
+        if(data.title.trim() === '') { showToast("Task title cannot be empty!", "danger"); return; }
+        fetchWithAuth('/tasks/update/' + id, { method: 'PUT', body: JSON.stringify(data) }).then(res => {
+            if(res.ok) { closeEditModal(); showToast("Task updated successfully!", "success"); fetchTasks(); }
+        });
+    }
+
+    function applyFilters() {
+        const catFilter = document.getElementById('filterCategory').value; const prioFilter = document.getElementById('filterPriority').value;
+        document.querySelectorAll('.task-item').forEach(item => {
+            const itemCat = item.getAttribute('data-category'); const itemPrio = item.getAttribute('data-priority');
+            item.style.display = ((catFilter === 'ALL' || itemCat === catFilter) && (prioFilter === 'ALL' || itemPrio === prioFilter)) ? 'block' : 'none';
+        });
+    }
+
+    // YENİ: Aynı anda birden fazla listeleme isteğinin çakışmasını engelleyen kilit değişkeni
+    let isFetchingTasks = false;
+
+    // GÜNCELLENDİ: Yarış Durumu (Race Condition) hatası kilit mekanizmasıyla çözüldü
+    function fetchTasks() {
+        if(!activeUserId) return Promise.resolve();
+
+        // Eğer şu an zaten bir listeleme işlemi yapılıyorsa, ikinci isteği iptal et
+        if(isFetchingTasks) return Promise.resolve();
+        isFetchingTasks = true; // Kapıyı kilitle
+
+        document.getElementById('col-PENDING').innerHTML = '';
+        document.getElementById('col-IN_PROGRESS').innerHTML = '';
+        document.getElementById('col-COMPLETED').innerHTML = '';
+        let cPending = 0, cInProgress = 0, cCompleted = 0;
+
+        return fetchWithAuth('/users/' + activeUserId + '/tasks')
+            .then(res => res.json())
+            .then(tasks => {
+                currentTasks = tasks;
+                if(!Array.isArray(tasks)) return;
+
+                tasks.forEach(task => {
+                    const card = document.createElement('div');
+                    card.className = 'task-item';
+                    card.draggable = true;
+                    card.ondragstart = (ev) => dragTask(ev, task.id);
+                    card.ondragend = (ev) => ev.target.style.opacity = "1";
+                    card.setAttribute('data-category', task.category);
+                    card.setAttribute('data-priority', task.priority);
+
+                    let dateText = 'No Date';
+                    if (task.dueDate) {
+                        const dateObj = new Date(task.dueDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        dateObj.setHours(0, 0, 0, 0);
+                        dateText = dateObj.toLocaleDateString('en-US');
+                        if (dateObj < today && task.status !== 'COMPLETED') {
+                            dateText = `<span style="color: var(--danger); font-weight: bold;"><i class="fa-solid fa-triangle-exclamation"></i> Overdue (${dateText})</span>`;
+                        } else {
+                            dateText = `<i class="fa-regular fa-calendar"></i> ${dateText}`;
+                        }
+                    } else {
+                        dateText = `<i class="fa-regular fa-calendar"></i> ${dateText}`;
+                    }
+
+                    let subtaskText = '';
+                    if(task.subTasks && task.subTasks.length > 0) {
+                        const comp = task.subTasks.filter(s => s.completed).length;
+                        subtaskText = `<span class="badge" style="background:var(--bg-color); border:1px solid var(--border); color:var(--text-muted);"><i class="fa-solid fa-list-check"></i> ${comp}/${task.subTasks.length}</span>`;
+                    }
+
+                    let descHTML = task.description ? `<span class="task-desc"><i class="fa-solid fa-quote-left" style="opacity:0.4; margin-right:4px;"></i>${task.description}</span>` : '';
+
+                    card.innerHTML = `<button class="history-btn" onclick="openHistoryModal(${task.id})" title="View History"><i class="fa-solid fa-clock-rotate-left"></i></button><button class="edit-btn" onclick="openEditTaskModal(${task.id})" title="Edit Task"><i class="fa-solid fa-pen-to-square"></i></button><button class="delete-btn" onclick="deleteTask(${task.id})" title="Delete"><i class="fa-solid fa-xmark"></i></button><span class="task-title" style="${descHTML ? 'margin-bottom: 6px;' : ''}">${task.title}</span>${descHTML}<div class="task-meta"><div class="meta-row">${getCategoryBadge(task.category)} ${getPriorityBadge(task.priority)}</div><div class="meta-row" style="color:var(--text-muted); margin-top:2px; display:flex; justify-content:space-between;"><span>${dateText}</span>${subtaskText}</div></div>`;
+
+                    const status = task.status || 'PENDING';
+                    if(status === 'PENDING') { document.getElementById('col-PENDING').appendChild(card); cPending++; }
+                    else if(status === 'IN_PROGRESS') { document.getElementById('col-IN_PROGRESS').appendChild(card); cInProgress++; }
+                    else if(status === 'COMPLETED') { document.getElementById('col-COMPLETED').appendChild(card); cCompleted++; }
+                });
+
+                document.getElementById('count-PENDING').textContent = cPending;
+                document.getElementById('count-IN_PROGRESS').textContent = cInProgress;
+                document.getElementById('count-COMPLETED').textContent = cCompleted;
+
+                updateChart(tasks);
+                applyFilters();
+            })
+            .catch(err => console.error("Error fetching tasks:", err))
+            .finally(() => {
+                // İşlem başarıyla bitse de hata alsa da en sonunda kapıyı tekrar aç
+                isFetchingTasks = false;
+            });
+    }
+    document.getElementById('btnAddTask').addEventListener('click', function() {
+        if(!activeUserId) return;
+        const title = document.getElementById('newTaskTitle').value;
+        const desc = document.getElementById('newTaskDesc').value;
+        const category = document.getElementById('newTaskCategory').value;
+        const priority = document.getElementById('newTaskPriority').value;
+        const dueDate = document.getElementById('newTaskDate').value;
+
+        if(title.trim() === '') { showToast("Task title cannot be empty!", "danger"); return; }
+        const todayStr = new Date().toISOString().split('T')[0];
+        if(dueDate && dueDate < todayStr) { showToast("Error: You cannot set a deadline in the past!", "danger"); return; }
+
+        // DÜZELTİLDİ: URL artık Backend'deki gibi '/users/ID/tasks/add' oldu. (403 hatası çözüldü)
+        fetchWithAuth(`/users/${activeUserId}/tasks/add`, {
+            method: 'POST',
+            body: JSON.stringify({
+                title: title,
+                description: desc,
+                status: "PENDING",
+                priority: priority,
+                dueDate: dueDate || null,
+                category: category,
+                user: { id: activeUserId }
+            })
+        }).then(res => {
+            if(res.ok) {
+                document.getElementById('newTaskTitle').value = '';
+                document.getElementById('newTaskDesc').value = '';
+                fetchTasks();
+            } else {
+                showToast("Failed to add task. (Error 403)", "danger");
+            }
+        });
+    });
+
+    function deleteTask(id) { if(confirm("Are you sure you want to delete this task?")) fetchWithAuth('/tasks/delete/' + id, { method: 'DELETE' }).then(() => fetchTasks()); }
+    function getAIRecommendation() {
+        const selectedCategory = document.getElementById('newTaskCategory').value;
+        fetchWithAuth(`/users/recommendation?category=${selectedCategory}`).then(res => res.json()).then(user => {
+            if(!user || !user.id) { showToast("Not enough data for recommendation.", "warning"); return; }
+            const catText = document.getElementById('newTaskCategory').options[document.getElementById('newTaskCategory').selectedIndex].text;
+            document.getElementById('aiModalMessage').innerHTML = `The expert with the highest completion rate in <strong>${catText}</strong> is:<br><strong style="color: var(--ai-color); font-size: 18px; display: inline-block; margin-top: 8px;">${user.fullName}</strong><br> Would you like to switch to this expert's workspace?`;
+            document.getElementById('btnAiConfirm').onclick = () => { document.getElementById('userSelector').value = user.id; onUserChange(); closeAIModal(); showToast("Switched to expert workspace!", "ai"); };
+            document.getElementById('aiModalOverlay').classList.add('active');
+        });
+    }
+
+    function uploadAvatarFile(event) {
+        const file = event.target.files[0]; if(!file) return;
+        if(file.size > 2 * 1024 * 1024) { showToast("File is too large! Maximum 2MB allowed.", "danger"); event.target.value = ''; return; }
+        const formData = new FormData(); formData.append("file", file);
+        showLoader();
+        fetch('/api/files/avatar', { method: 'POST', headers: { 'Authorization': 'Bearer ' + jwtToken }, body: formData })
+            .then(async res => {
+                if(res.ok) {
+                    const newAvatarUrl = await res.text(); showToast("Profile picture updated!", "success");
+                    if (loggedInUser && loggedInUser.id == activeUserId) loggedInUser.avatarUrl = newAvatarUrl;
+                    const uIndex = userList.findIndex(u => u.id == activeUserId); if(uIndex !== -1) userList[uIndex].avatarUrl = newAvatarUrl;
+                    updateUserCard();
+                } else { showToast("Failed to upload image.", "danger"); }
+            }).catch(() => { showToast("Server connection error!", "danger"); }).finally(() => { hideLoader(); event.target.value = ''; });
+    }
+
+    window.onload = () => {
+        const savedTheme = localStorage.getItem('theme') || 'light'; document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('themeIcon').className = savedTheme === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        const todayStr = new Date().toISOString().split('T')[0]; document.getElementById('newTaskDate').min = todayStr; document.getElementById('editDate').min = todayStr;
+        checkAuth();
+    };
+</script>
+</body>
+</html>

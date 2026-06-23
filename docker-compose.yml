@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # 1. VERİTABANI SUNUCUSU (MariaDB)
+  db:
+    image: mariadb:latest
+    container_name: unitasker-db
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: unitasker
+    ports:
+      - "3306:3306"
+
+  # 2. JAVA BACKEND SUNUCUMUZ
+  app:
+    build: .
+    container_name: unitasker-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # Dikkat: localhost yerine direkt 'db' yazıyoruz çünkü Docker kendi içinde ağ kuruyor
+      SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/unitasker
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+    depends_on:
+      - db
