@@ -13,10 +13,14 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    // Gönderici e-postasını buraya sabitliyoruz
+    private final String senderEmail = "freyaexe42@gmail.com";
+
     // 1. ADIM: Sadece 6 haneli kodu içeren sade bir mail
     public void sendVerificationCode(String toEmail, String code) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(senderEmail); // KRİTİK EKLENTİ
             message.setTo(toEmail);
             message.setSubject("UniTasker Doğrulama Kodunuz");
             message.setText("Sisteme giriş yapabilmek için doğrulama kodunuz:\n\n" + code + "\n\nLütfen bu kodu kimseyle paylaşmayın.");
@@ -25,9 +29,11 @@ public class EmailService {
             System.err.println("OTP E-postası gönderilemedi: " + e.getMessage());
         }
     }
+
     public void sendPasswordResetCode(String toEmail, String code) {
         try {
-            org.springframework.mail.SimpleMailMessage message = new org.springframework.mail.SimpleMailMessage();
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(senderEmail); // KRİTİK EKLENTİ
             message.setTo(toEmail);
             message.setSubject("UniTasker Şifre Sıfırlama Kodu 🔐");
             message.setText("Şifrenizi sıfırlamak için kullanacağınız 6 haneli güvenlik kodunuz:\n\n"
@@ -44,10 +50,11 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+            helper.setFrom(senderEmail); // KRİTİK EKLENTİ
             helper.setTo(toEmail);
             helper.setSubject("UniTasker'a Hoş Geldiniz! 🚀");
 
-            // GÜNCELLENDİ: Dış resim yerine CSS Gradient Başlık kullanıldı (Asla engellenmez)
+            // GÜNCELLENDİ: localhost linki yerine Railway Canlı Sunucu Linki eklendi!
             String htmlMsg = "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>"
                     + "<div style='background: linear-gradient(135deg, #4f46e5, #7e22ce); padding: 40px 20px; text-align: center;'>"
                     + "<h1 style='color: white; margin: 0; font-size: 28px;'>🚀 UniTasker Workspace</h1>"
@@ -56,12 +63,12 @@ public class EmailService {
                     + "<h2 style='color: #4f46e5; margin-top: 0;'>Hoş Geldiniz, " + userName + "!</h2>"
                     + "<p style='font-size: 15px; color: #4b5563; line-height: 1.6;'>Hesabınız başarıyla doğrulandı. Artık UniTasker Enterprise üzerinde kendi görevlerinizi yönetebilir, XP kazanabilir ve performansınızı takip edebilirsiniz.</p>"
                     + "<div style='margin-top: 30px; margin-bottom: 20px;'>"
-                    + "<a href='http://localhost:8080' style='background-color: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>Çalışma Alanına Git</a>"
+                    + "<a href='https://unitasker-enterprise-production.up.railway.app' style='background-color: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>Çalışma Alanına Git</a>"
                     + "</div>"
                     + "<p style='font-size: 12px; color: #9ca3af; margin-top: 30px;'>Bu e-posta otomatik olarak gönderilmiştir.</p>"
                     + "</div></div>";
 
-            helper.setText(htmlMsg, true); // true = Bu bir HTML e-postasıdır demek
+            helper.setText(htmlMsg, true);
             mailSender.send(message);
 
         } catch (Exception e) {
