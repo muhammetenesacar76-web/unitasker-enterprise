@@ -23,7 +23,7 @@ public class FileUploadController {
     private UserRepository userRepository;
 
     // ImgBB Bulut Sunucusu API Anahtarı (Kendi anahtarını buraya yaz)
-    private final String IMGBB_API_KEY = "BURAYA_API_KEY_GELECEK";
+    private final String IMGBB_API_KEY = "a91b5a9c6add2f905c0ad15d060d67e1";
 
     @PostMapping("/avatar")
     public ResponseEntity<String> uploadAvatar(
