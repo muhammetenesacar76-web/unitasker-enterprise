@@ -293,6 +293,52 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="userManagementModalOverlay">
+    <div class="ai-modal" style="width: 600px; max-width: 95vw; border-color: var(--warning);">
+        <h3 style="margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+            <i class="fa-solid fa-users-gear" style="color: var(--warning);"></i> User Management Panel
+        </h3>
+
+        <div style="background: var(--bg-color); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed var(--border);">
+            <h4 id="adminUserFormTitle" style="margin-top:0; margin-bottom:10px; color: var(--primary);">Add New User (Instant Bypass)</h4>
+            <input type="hidden" id="adminUserId">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <input type="text" id="adminUserFullName" placeholder="Full Name">
+                <input type="email" id="adminUserEmail" placeholder="Email Address">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <input type="password" id="adminUserPassword" placeholder="Password">
+                <select id="adminUserRole">
+                    <option value="ROLE_USER">ROLE_USER (Standard)</option>
+                    <option value="ROLE_ADMIN">ROLE_ADMIN (System Admin)</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-primary" id="btnAdminUserSave" onclick="saveAdminUser()" style="flex: 1;">Create User</button>
+                <button class="btn-icon" id="btnAdminUserCancel" onclick="clearAdminUserForm()" style="display:none; padding: 10px;">Cancel</button>
+            </div>
+        </div>
+
+        <label style="font-weight: bold; margin-bottom: 8px; display: block;">Active Users Database</label>
+        <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                <tr style="background: var(--bg-color); border-bottom: 1px solid var(--border);">
+                    <th style="padding: 10px;">Name</th>
+                    <th style="padding: 10px;">Email</th>
+                    <th style="padding: 10px;">Role</th>
+                    <th style="padding: 10px; text-align: center;">Actions</th>
+                </tr>
+                </thead>
+                <tbody id="adminUserTableBody"></tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button class="btn-icon" style="border: 1px solid var(--border); padding: 12px; width: 100%; border-radius: 8px;" onclick="closeUserManagementModal()">Close Panel</button>
+        </div>
+    </div>
+</div>
 <div class="dashboard-container" id="dashboardContent">
     <div class="left-sidebar">
         <div class="card" style="margin-bottom: 25px; padding: 20px;">
@@ -300,6 +346,9 @@
             <div class="form-group" id="adminWorkspaceSelector" style="display: none;">
                 <label><i class="fa-solid fa-users-gear"></i> Admin: Switch Workspace</label>
                 <select id="userSelector" onchange="onUserChange()"></select>
+                <button class="btn-primary" style="margin-top: 10px; background: var(--warning); color: #1f2937;" onclick="openUserManagementModal()">
+                    <i class="fa-solid fa-users-gear"></i> Control Users Database
+                </button>
             </div>
 
             <div class="user-profile" id="userProfileCard" style="display: none;">
@@ -724,38 +773,21 @@
                 const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.fullName; selector.appendChild(opt);
             });
             activeUserId = selectId ? selectId : users[0].id; selector.value = activeUserId; updateUserCard(); fetchTasks();
-        }).catch(() => { /* GÜNCELLENDİ: Hata verirse direkt sistemden atmaması için logout kaldırıldı */ });
+        }).catch(() => { });
     }
 
-    // GÜNCELLENDİ: Profil Fotoğrafı (Avatar) Sistemi Kurşun Geçirmez Hale Getirildi
     function updateUserCard() {
-        const user = userList.find(u => u.id == activeUserId);
-        if(!user) return;
-
+        const user = userList.find(u => u.id == activeUserId); if(!user) return;
         document.getElementById('userProfileCard').style.display = 'block';
         document.getElementById('activeName').textContent = user.fullName;
-
         const avatarImg = document.getElementById('activeAvatar');
 
-        // 1. Dinamik, İsme Özel Garanti Resim Linki (Boşlukları %20 yaparak hataları önler)
         const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=4f46e5&color=fff&bold=true&rounded=true`;
-
-        // 2. Eğer DB'den gelen resim yüklenemezse veya bulunamazsa DEVREYE GİRECEK SİGORTA KODU:
-        avatarImg.onerror = function() {
-            this.onerror = null; // Sonsuz döngüyü engelle
-            this.src = fallbackUrl; // Şık logoyu yapıştır
-        };
-
-        // 3. Resmi Ata (Varsa DB'dekini dener, patlarsa üstteki 'onerror' onu kurtarır)
+        avatarImg.onerror = function() { this.onerror = null; this.src = fallbackUrl; };
         avatarImg.src = user.avatarUrl ? user.avatarUrl : fallbackUrl;
 
-        const level = user.level || 1;
-        const reqXp = level * 100;
-        let title = "Junior";
-        if(level >= 3) title = "Mid-Level";
-        if(level >= 5) title = "Senior";
-        if(level >= 10) title = "Lead / Expert";
-
+        const level = user.level || 1; const reqXp = level * 100;
+        let title = "Junior"; if(level >= 3) title = "Mid-Level"; if(level >= 5) title = "Senior"; if(level >= 10) title = "Lead / Expert";
         document.getElementById('activeLevel').innerHTML = `Lvl. ${level} <span style="font-weight:normal; font-size:11px; margin-left:4px; opacity:0.8;">${title}</span>`;
         document.getElementById('xpText').textContent = `${user.xp || 0} / ${reqXp} XP`;
         document.getElementById('xpProgress').style.width = `${((user.xp || 0) / reqXp) * 100}%`;
@@ -766,30 +798,21 @@
     function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
     function dragTask(ev, taskId) { ev.dataTransfer.setData("taskId", taskId); ev.target.style.opacity = "0.5"; }
 
-    // GÜNCELLENDİ: Normal Kullanıcıların XP Güncellemesi Düzeltildi
     function dropTask(ev, newStatus) {
         ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
         const taskId = ev.dataTransfer.getData("taskId"); if(!taskId) return;
         const draggedElement = document.querySelector(`[ondragstart*="${taskId}"]`);
         const wasCompleted = draggedElement ? draggedElement.parentElement.id === 'col-COMPLETED' : false;
-
         fetchWithAuth('/tasks/update/' + taskId, { method: 'PUT', body: JSON.stringify({ status: newStatus }) })
             .then(res => {
                 if(res.ok) {
-                    // TOAST Bildirimi (XP Kazanıldı / Düştü)
                     if(newStatus === 'COMPLETED' && !wasCompleted) showToast('Task completed, XP earned! 🚀', 'success');
                     else if (wasCompleted && newStatus !== 'COMPLETED') showToast('Task reverted, XP deducted! 📉', 'danger');
-
-                    // Sadece kullanıcının KENDİ verisini çek ve güncelle (403 yetki hatasını önler)
                     fetchWithAuth('/auth/me').then(r => r.json()).then(user => {
                         if(user.role === 'ROLE_ADMIN') {
-                            fetchUsers(activeUserId); // Admin yetkiliyse tüm listeyi yenile
+                            fetchUsers(activeUserId);
                         } else {
-                            // Normal kullanıcıysa sadece kendi bilgilerini listede ezip ekranı yenile
-                            loggedInUser = user;
-                            userList = [user];
-                            activeUserId = user.id;
-                            updateUserCard();
+                            loggedInUser = user; userList = [user]; activeUserId = user.id; updateUserCard();
                         }
                     });
                 }
@@ -854,7 +877,6 @@
 
     function fetchTasks() {
         if(!activeUserId) return Promise.resolve();
-
         if(isFetchingTasks) return Promise.resolve();
         isFetchingTasks = true;
 
@@ -882,8 +904,7 @@
                     if (task.dueDate) {
                         const dateObj = new Date(task.dueDate);
                         const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        dateObj.setHours(0, 0, 0, 0);
+                        today.setHours(0, 0, 0, 0); dateObj.setHours(0, 0, 0, 0);
                         dateText = dateObj.toLocaleDateString('en-US');
                         if (dateObj < today && task.status !== 'COMPLETED') {
                             dateText = `<span style="color: var(--danger); font-weight: bold;"><i class="fa-solid fa-triangle-exclamation"></i> Overdue (${dateText})</span>`;
@@ -914,13 +935,10 @@
                 document.getElementById('count-IN_PROGRESS').textContent = cInProgress;
                 document.getElementById('count-COMPLETED').textContent = cCompleted;
 
-                updateChart(tasks);
-                applyFilters();
+                updateChart(tasks); applyFilters();
             })
             .catch(err => console.error("Error fetching tasks:", err))
-            .finally(() => {
-                isFetchingTasks = false;
-            });
+            .finally(() => { isFetchingTasks = false; });
     }
 
     document.getElementById('btnAddTask').addEventListener('click', function() {
@@ -938,22 +956,12 @@
         fetchWithAuth(`/users/${activeUserId}/tasks/add`, {
             method: 'POST',
             body: JSON.stringify({
-                title: title,
-                description: desc,
-                status: "PENDING",
-                priority: priority,
-                dueDate: dueDate || null,
-                category: category,
-                user: { id: activeUserId }
+                title: title, description: desc, status: "PENDING", priority: priority, dueDate: dueDate || null, category: category, user: { id: activeUserId }
             })
         }).then(res => {
             if(res.ok) {
-                document.getElementById('newTaskTitle').value = '';
-                document.getElementById('newTaskDesc').value = '';
-                fetchTasks();
-            } else {
-                showToast("Failed to add task. (Error 403)", "danger");
-            }
+                document.getElementById('newTaskTitle').value = ''; document.getElementById('newTaskDesc').value = ''; fetchTasks();
+            } else { showToast("Failed to add task. (Error 403)", "danger"); }
         });
     });
 
@@ -970,21 +978,141 @@
         });
     }
 
-    // GÜNCELLENDİ: Fotoğraf Yüklenince Ekranı Sorunsuz Güncelle
+    // GÜNCELLENDİ: Fotoğraf yüklenirken parametre olarak seçilen kullanıcının id bilgisini (activeUserId) ekler
     function uploadAvatarFile(event) {
         const file = event.target.files[0]; if(!file) return;
         if(file.size > 2 * 1024 * 1024) { showToast("File is too large! Maximum 2MB allowed.", "danger"); event.target.value = ''; return; }
         const formData = new FormData(); formData.append("file", file);
         showLoader();
-        fetch('/api/files/avatar', { method: 'POST', headers: { 'Authorization': 'Bearer ' + jwtToken }, body: formData })
+
+        // BUG FIX: ?userId= parametresi eklenerek Admin'in başkasının resmini bozması engellendi
+        fetch('/api/files/avatar?userId=' + activeUserId, { method: 'POST', headers: { 'Authorization': 'Bearer ' + jwtToken }, body: formData })
             .then(async res => {
                 if(res.ok) {
-                    const newAvatarUrl = await res.text(); showToast("Profile picture updated!", "success");
+                    const newAvatarUrl = await res.text(); showToast("Profile picture successfully deployed to Cloud!", "success");
                     if (loggedInUser && loggedInUser.id == activeUserId) loggedInUser.avatarUrl = newAvatarUrl;
                     const uIndex = userList.findIndex(u => u.id == activeUserId); if(uIndex !== -1) userList[uIndex].avatarUrl = newAvatarUrl;
-                    updateUserCard(); // Ekranı anında güncelle
+                    updateUserCard();
                 } else { showToast("Failed to upload image.", "danger"); }
             }).catch(() => { showToast("Server connection error!", "danger"); }).finally(() => { hideLoader(); event.target.value = ''; });
+    }
+
+    // ==========================================
+    // YENİ: KULLANICI YÖNETİM PANELİ JAVASCRIPT LOGIC
+    // ==========================================
+    function openUserManagementModal() {
+        renderAdminUserTable();
+        document.getElementById('userManagementModalOverlay').classList.add('active');
+    }
+
+    function closeUserManagementModal() {
+        document.getElementById('userManagementModalOverlay').classList.remove('active');
+        clearAdminUserForm();
+    }
+
+    function renderAdminUserTable() {
+        const tbody = document.getElementById('adminUserTableBody');
+        tbody.innerHTML = '';
+        userList.forEach(u => {
+            tbody.innerHTML += `
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 10px; font-weight: 600;">${u.fullName}</td>
+                    <td style="padding: 10px; color: var(--text-muted);">${u.email}</td>
+                    <td style="padding: 10px;"><span class="badge ${u.role === 'ROLE_ADMIN' ? 'badge-yuksek' : 'badge-cat'}">${u.role}</span></td>
+                    <td style="padding: 10px; text-align: center; display: flex; justify-content: center; gap: 8px;">
+                        <button class="btn-icon" onclick="editAdminUserSetup(${u.id})" title="Edit Credentials" style="padding: 4px 8px;"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-icon danger" onclick="deleteAdminUser(${u.id})" title="Terminate Account" style="padding: 4px 8px; color: var(--danger);"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function editAdminUserSetup(id) {
+        const u = userList.find(user => user.id == id);
+        if(!u) return;
+        document.getElementById('adminUserId').value = u.id;
+        document.getElementById('adminUserFullName').value = u.fullName;
+        document.getElementById('adminUserEmail').value = u.email;
+        document.getElementById('adminUserRole').value = u.role;
+        document.getElementById('adminUserPassword').value = '';
+        document.getElementById('adminUserFormTitle').textContent = "Edit Workspace Profile: " + u.fullName;
+        document.getElementById('btnAdminUserSave').textContent = "Save Modifications";
+        document.getElementById('btnAdminUserCancel').style.display = "inline-flex";
+    }
+
+    function clearAdminUserForm() {
+        document.getElementById('adminUserId').value = '';
+        document.getElementById('adminUserFullName').value = '';
+        document.getElementById('adminUserEmail').value = '';
+        document.getElementById('adminUserRole').value = 'ROLE_USER';
+        document.getElementById('adminUserPassword').value = '';
+        document.getElementById('adminUserFormTitle').textContent = "Add New User (Instant Bypass)";
+        document.getElementById('btnAdminUserSave').textContent = "Create User";
+        document.getElementById('btnAdminUserCancel').style.display = "none";
+    }
+
+    function saveAdminUser() {
+        const id = document.getElementById('adminUserId').value;
+        const fullName = document.getElementById('adminUserFullName').value.trim();
+        const email = document.getElementById('adminUserEmail').value.trim();
+        const role = document.getElementById('adminUserRole').value;
+        const password = document.getElementById('adminUserPassword').value;
+
+        if(!fullName || !email) { showToast("Name and Email parameters are required!", "danger"); return; }
+
+        const payload = { fullName, email, role };
+        if(password) payload.password = password;
+
+        showLoader();
+        if(id) {
+            // Düzenleme (PUT)
+            fetchWithAuth('/api/admin/users/update/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+                .then(res => {
+                    if(res.ok) {
+                        showToast("Workspace account updated successfully!", "success");
+                        fetchUsers(activeUserId);
+                        setTimeout(renderAdminUserTable, 400);
+                        clearAdminUserForm();
+                    } else { showToast("Failed to modify user credentials.", "danger"); }
+                }).finally(() => hideLoader());
+        } else {
+            // İçeriden Yeni Ekleme (POST)
+            if(!password) { hideLoader(); showToast("Security password is required for new users!", "danger"); return; }
+            fetchWithAuth('/api/admin/users/add', { method: 'POST', body: JSON.stringify(payload) })
+                .then(res => {
+                    if(res.ok) {
+                        showToast("Account created with instant authentication bypass!", "success");
+                        fetchUsers(activeUserId);
+                        setTimeout(renderAdminUserTable, 400);
+                        clearAdminUserForm();
+                    } else { showToast("Failed to compile new user database object.", "danger"); }
+                }).finally(() => hideLoader());
+        }
+    }
+
+    function deleteAdminUser(id) {
+        if(id == loggedInUser.id) { showToast("Security Error: You cannot eliminate your own administrator session!", "danger"); return; }
+        if(confirm("CRITICAL ACCORD: Are you absolutely sure you want to permanently delete this account and all linked workspace objects?")) {
+            showLoader();
+            fetchWithAuth('/api/admin/users/delete/' + id, { method: 'DELETE' })
+                .then(res => {
+                    if(res.ok) {
+                        showToast("Database records cleared!", "success");
+                        fetchWithAuth('/users').then(r => r.json()).then(users => {
+                            userList = users;
+                            const selector = document.getElementById('userSelector');
+                            selector.innerHTML = '';
+                            users.forEach(u => {
+                                const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.fullName; selector.appendChild(opt);
+                            });
+                            if(activeUserId == id) { activeUserId = users[0].id; }
+                            selector.value = activeUserId;
+                            updateUserCard(); fetchTasks(); renderAdminUserTable();
+                        });
+                    } else { showToast("Failed to delete user database row.", "danger"); }
+                }).finally(() => hideLoader());
+        }
     }
 
     window.onload = () => {

@@ -22,18 +22,19 @@ public class FileUploadController {
     @Autowired
     private UserRepository userRepository;
 
-    // ImgBB Bulut Sunucusu API Anahtarı
-    private final String IMGBB_API_KEY = "a91b5a9c6add2f905c0ad15d060d67e1";
+    // ImgBB Bulut Sunucusu API Anahtarı (Kendi anahtarını buraya yaz)
+    private final String IMGBB_API_KEY = "BURAYA_API_KEY_GELECEK";
 
     @PostMapping("/avatar")
-    public ResponseEntity<String> uploadAvatar(@RequestParam("file") MultipartFile file, Principal principal) {
+    public ResponseEntity<String> uploadAvatar(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "userId", required = false) Long userId,
+            Principal principal) {
         if (principal == null) return ResponseEntity.status(401).body("Error: Unauthorized");
 
         try {
-            // 1. Resmi Base64 formatına (Metne) çeviriyoruz (Buluta yollamak için en güvenli ve hızlı yol)
             String base64Image = Base64.getEncoder().encodeToString(file.getBytes());
 
-            // 2. ImgBB Sunucusuna fırlatmak için paketi hazırlıyoruz
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -44,19 +45,21 @@ public class FileUploadController {
             HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
             String url = "https://api.imgbb.com/1/upload?key=" + IMGBB_API_KEY;
 
-            // 3. Paketi fırlat ve cevabı bekle
             ResponseEntity<Map> response = restTemplate.postForEntity(url, requestEntity, Map.class);
 
-            // 4. ImgBB bize resmin ASLA SİLİNMEYECEK kalıcı linkini veriyor!
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
                 Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
-
-                // İşte ImgBB'nin bize verdiği o mükemmel kalıcı link
                 String imageUrl = (String) data.get("url");
 
-                // 5. Bu kalıcı linki Veritabanına (MariaDB) kaydet
-                Optional<User> userOpt = userRepository.findByEmail(principal.getName());
+                // GÜNCELLEME: Eğer ön yüzden userId gönderildiyse o kullanıcıyı bul, yoksa kendini bul.
+                Optional<User> userOpt;
+                if (userId != null) {
+                    userOpt = userRepository.findById(userId);
+                } else {
+                    userOpt = userRepository.findByEmail(principal.getName());
+                }
+
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
                     user.setAvatarUrl(imageUrl);
@@ -64,14 +67,13 @@ public class FileUploadController {
 
                     return ResponseEntity.ok(imageUrl);
                 } else {
-                    return ResponseEntity.status(404).body("User not found in DB");
+                    return ResponseEntity.status(404).body("User not found");
                 }
             }
-
-            return ResponseEntity.status(500).body("Bulut sunucusu resmi kabul etmedi.");
+            return ResponseEntity.status(500).body("Cloud server rejected image");
 
         } catch (Exception e) {
-            return ResponseEntity.status(500).body("Bulut yükleme hatası: " + e.getMessage());
+            return ResponseEntity.status(500).body("Cloud upload error: " + e.getMessage());
         }
     }
 }
