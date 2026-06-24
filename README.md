@@ -38,17 +38,6 @@ An enterprise-grade, real-time task management platform designed to streamline p
 
 ---
 
-## 📸 Application Previews
-
-*(Add your screenshots here to make your portfolio stand out)*
-
-> **Login & OTP Verification**
-> ![Login Screen](https://via.placeholder.com/800x400?text=Insert+Login+Screenshot+Here)
-
-> **Real-Time Kanban Board & Admin Workspace**
-> ![Dashboard](https://via.placeholder.com/800x400?text=Insert+Dashboard+Screenshot+Here)
-
----
 
 ## 🚀 How to Run Locally
 
