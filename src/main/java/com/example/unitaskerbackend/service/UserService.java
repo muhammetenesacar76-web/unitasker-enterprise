@@ -1,5 +1,6 @@
 package com.example.unitaskerbackend.service;
 
+import com.example.unitaskerbackend.model.Task;
 import com.example.unitaskerbackend.model.User;
 import com.example.unitaskerbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,16 +34,31 @@ public class UserService {
 
     // Basit uzman tavsiye algoritması
     public User getCategoryExpert(String category) {
-        List<User> users = userRepository.findAll();
-        if (users.isEmpty()) return null;
+        List<User> allUsers = userRepository.findAll();
+        User expertUser = null;
+        int maxCompletedTasks = 0;
 
-        // Şimdilik en yüksek levele sahip kullanıcıyı döndürür, ileride kategori bazlı filtre eklenebilir.
-        User expert = users.get(0);
-        for (User u : users) {
-            if (u.getLevel() > expert.getLevel()) {
-                expert = u;
+        for (User user : allUsers) {
+            int completedCount = 0;
+
+            // Kullanıcının görevleri boş değilse saymaya başla
+            if (user.getTasks() != null) {
+                for (Task task : user.getTasks()) {
+                    // Sadece SEÇİLEN KATEGORİDEKİ ve durumu COMPLETED olanları say!
+                    if (category.equals(task.getCategory()) && "COMPLETED".equals(task.getStatus())) {
+                        completedCount++;
+                    }
+                }
+            }
+
+            // Eğer bu kullanıcının tamamladığı görev sayısı şu ana kadarki en yüksek sayıysa, uzman ilan et
+            if (completedCount > maxCompletedTasks) {
+                maxCompletedTasks = completedCount;
+                expertUser = user;
             }
         }
-        return expert;
+
+        // Eğer o kategoride hiç kimse görev bitirmemişse null döner, ön yüz "veri yok" der.
+        return expertUser;
     }
 }
