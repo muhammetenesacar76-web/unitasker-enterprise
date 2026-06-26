@@ -921,10 +921,9 @@
                         subtaskText = `<span class="badge" style="background:var(--bg-color); border:1px solid var(--border); color:var(--text-muted);"><i class="fa-solid fa-list-check"></i> ${comp}/${task.subTasks.length}</span>`;
                     }
 
-                    let descHTML = task.description ? `<span class="task-desc"><i class="fa-solid fa-quote-left" style="opacity:0.4; margin-right:4px;"></i>${task.description}</span>` : '';
-
-                    card.innerHTML = `<button class="history-btn" onclick="openHistoryModal(${task.id})" title="View History"><i class="fa-solid fa-clock-rotate-left"></i></button><button class="edit-btn" onclick="openEditTaskModal(${task.id})" title="Edit Task"><i class="fa-solid fa-pen-to-square"></i></button><button class="delete-btn" onclick="deleteTask(${task.id})" title="Delete"><i class="fa-solid fa-xmark"></i></button><span class="task-title" style="${descHTML ? 'margin-bottom: 6px;' : ''}">${task.title}</span>${descHTML}<div class="task-meta"><div class="meta-row">${getCategoryBadge(task.category)} ${getPriorityBadge(task.priority)}</div><div class="meta-row" style="color:var(--text-muted); margin-top:2px; display:flex; justify-content:space-between;"><span>${dateText}</span>${subtaskText}</div></div>`;
-
+// task.description artık doğrudan değil, escapeHTML filtresinden geçerek ekrana basılıyor
+                    let descHTML = task.description ? `<span class="task-desc"><i class="fa-solid fa-quote-left" style="opacity:0.4; margin-right:4px;"></i>${escapeHTML(task.description)}</span>` : '';
+                    card.innerHTML = `<button class="history-btn" onclick="openHistoryModal(${task.id})" title="View History"><i class="fa-solid fa-clock-rotate-left"></i></button><button class="edit-btn" onclick="openEditTaskModal(${task.id})" title="Edit Task"><i class="fa-solid fa-pen-to-square"></i></button><button class="delete-btn" onclick="deleteTask(${task.id})" title="Delete"><i class="fa-solid fa-xmark"></i></button><span class="task-title" style="${descHTML ? 'margin-bottom: 6px;' : ''}">${escapeHTML(task.title)}</span>${descHTML}<div class="task-meta"><div class="meta-row">${getCategoryBadge(task.category)} ${getPriorityBadge(task.priority)}</div><div class="meta-row" style="color:var(--text-muted); margin-top:2px; display:flex; justify-content:space-between;"><span>${dateText}</span>${subtaskText}</div></div>`;
                     const status = task.status || 'PENDING';
                     if(status === 'PENDING') { document.getElementById('col-PENDING').appendChild(card); cPending++; }
                     else if(status === 'IN_PROGRESS') { document.getElementById('col-IN_PROGRESS').appendChild(card); cInProgress++; }
@@ -1121,6 +1120,19 @@
         const todayStr = new Date().toISOString().split('T')[0]; document.getElementById('newTaskDate').min = todayStr; document.getElementById('editDate').min = todayStr;
         checkAuth();
     };
+    // Kullanıcı girdilerindeki tehlikeli HTML etiketlerini etkisiz hale getiren fonksiyon
+    function escapeHTML(str) {
+        if (!str) return '';
+        return str.replace(/[&<>"']/g, function(m) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[m];
+        });
+    }
 </script>
 </body>
 </html>
