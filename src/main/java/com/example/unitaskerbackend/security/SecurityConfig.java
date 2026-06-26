@@ -27,7 +27,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // SADECE giriş, kayıt ve HTML arayüzüne biletsiz izin veriyoruz
+                        // 1. HERKESE AÇIK ALANLAR (Biletsiz giriş serbest)
                         .requestMatchers(
                                 "/auth/**",
                                 "/",
@@ -37,8 +37,18 @@ public class SecurityConfig {
                                 "/uploads/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/ws/**"               // YENİ: Canlı Bildirim (WebSocket) Kapısı
-                        ).permitAll()                        .anyRequest().authenticated()
+                                "/ws/**"               // Canlı Bildirim (WebSocket) Kapısı
+                        ).permitAll()
+
+                        // 2. 🚨 GÜVENLİK YAMASI: ADMIN ARKA KAPISI
+                        // Bu adrese sadece veritabanında rolü ROLE_ADMIN olanlar istek atabilir!
+                        // (HasRole metodu arka planda otomatik olarak "ROLE_" prefix'ini ekler,
+                        // bu yüzden sadece "ADMIN" yazmamız yeterlidir.)
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // 3. GERİ KALAN HER ŞEY (Görev ekleme, profil resmi vb.)
+                        // Sadece sisteme giriş yapmış (Token'ı olan) herkes yapabilir.
+                        .anyRequest().authenticated()
                 )
                 // Kendi yazdığımız güvenlik görevlisini kapıya dikiyoruz
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
