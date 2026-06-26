@@ -4,6 +4,7 @@ import com.example.unitaskerbackend.model.User;
 import com.example.unitaskerbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder; // YENİ: Şifreleme kütüphanesi
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -15,7 +16,11 @@ public class AdminUserController {
     @Autowired
     private UserRepository userRepository;
 
-    // 1. Admin içeriden direkt kullanıcı oluşturur (OTP/E-posta doğrulaması otomatik bypass edilir!)
+    // YENİ: Spring Security'nin şifreleme motorunu çağırıyoruz
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    // 1. Admin içeriden direkt kullanıcı oluşturur (OTP/E-posta bypass)
     @PostMapping("/add")
     public ResponseEntity<String> adminAddUser(@RequestBody User newUser) {
         if (userRepository.findByEmail(newUser.getEmail()).isPresent()) {
@@ -29,6 +34,11 @@ public class AdminUserController {
 
         if (newUser.getRole() == null || newUser.getRole().isEmpty()) {
             newUser.setRole("ROLE_USER");
+        }
+
+        // 🛡️ GÜVENLİK YAMASI: Şifreyi açık metin olarak değil, kırılmaz BCrypt formatında kaydet!
+        if (newUser.getPassword() != null && !newUser.getPassword().isEmpty()) {
+            newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
         }
 
         userRepository.save(newUser);
@@ -61,9 +71,9 @@ public class AdminUserController {
             user.setRole(updatedData.getRole());
         }
 
-        // Eğer şifre alanı ön yüzden dolu geldiyse güncelle
+        // 🛡️ GÜVENLİK YAMASI: Eğer Admin kullanıcının şifresini güncelliyorsa, bunu da şifrele!
         if (updatedData.getPassword() != null && !updatedData.getPassword().isEmpty()) {
-            user.setPassword(updatedData.getPassword());
+            user.setPassword(passwordEncoder.encode(updatedData.getPassword()));
         }
 
         userRepository.save(user);
