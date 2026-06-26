@@ -10,7 +10,9 @@ import com.example.unitaskerbackend.repository.TaskRepository;
 import com.example.unitaskerbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
+import java.util.Optional; // Optional kütüphanesi eklendi
 
 @Service
 public class TaskService {
@@ -48,14 +50,38 @@ public class TaskService {
         return "Task added successfully.";
     }
 
-    public String deleteTask(Long taskId) {
+    // 🛡️ GÜVENLİK YAMASI (IDOR): Sadece sahibi veya ADMIN silebilir!
+    public String deleteTaskSecure(Long taskId, String authenticatedEmail) {
+        Optional<Task> taskOpt = taskRepository.findById(taskId);
+        if (!taskOpt.isPresent()) {
+            return "Error: Task not found!";
+        }
+
+        Task task = taskOpt.get();
+        User currentUser = userRepository.findByEmail(authenticatedEmail).orElse(null);
+        if (currentUser == null) return "Error: Current user not found!";
+
+        // Sahiplik ve yetki kontrolü
+        if (task.getUser() != null && !task.getUser().getEmail().equals(authenticatedEmail) && !"ROLE_ADMIN".equals(currentUser.getRole())) {
+            return "Error: You do not have permission to delete this task!";
+        }
+
         taskRepository.deleteById(taskId);
         return "Task deleted successfully.";
     }
 
-    public String updateTask(Long taskId, Task updatedInfo) {
+    // 🛡️ GÜVENLİK YAMASI (IDOR): Sadece sahibi veya ADMIN güncelleyebilir!
+    public String updateTaskSecure(Long taskId, Task updatedInfo, String authenticatedEmail) {
         Task existingTask = taskRepository.findById(taskId).orElse(null);
-        if (existingTask == null) return "Task not found!";
+        if (existingTask == null) return "Error: Task not found!";
+
+        User currentUser = userRepository.findByEmail(authenticatedEmail).orElse(null);
+        if (currentUser == null) return "Error: Current user not found!";
+
+        // Sahiplik ve yetki kontrolü
+        if (existingTask.getUser() != null && !existingTask.getUser().getEmail().equals(authenticatedEmail) && !"ROLE_ADMIN".equals(currentUser.getRole())) {
+            return "Error: You do not have permission to update this task!";
+        }
 
         boolean previouslyCompleted = "COMPLETED".equals(existingTask.getStatus());
         boolean nowCompleted = "COMPLETED".equals(updatedInfo.getStatus());
@@ -82,7 +108,7 @@ public class TaskService {
 
         taskRepository.save(existingTask);
 
-        // XP ve Level Sistemi
+        // XP ve Level Sistemi (Senin kusursuz mantığın korundu)
         if (existingTask.getUser() != null) {
             User u = existingTask.getUser();
             int xpValue = "HIGH".equals(existingTask.getPriority()) ? 50 : ("MEDIUM".equals(existingTask.getPriority()) ? 25 : 10);

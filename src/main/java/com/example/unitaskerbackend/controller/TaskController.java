@@ -52,10 +52,17 @@ public class TaskController {
     }
 
     @DeleteMapping("/tasks/delete/{taskId}")
-    public ResponseEntity<String> deleteTask(@PathVariable Long taskId) {
-        String result = taskService.deleteTask(taskId);
+    public ResponseEntity<String> deleteTask(@PathVariable Long taskId, java.security.Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Error: Unauthorized");
 
-        // YENİ: Görev silindiğinde tüm ekranların güncellenmesi için anons yap
+        // 🛡️ GÜVENLİK YAMASI: Silme işlemine istek atan kişinin e-posta adresini de gönderiyoruz
+        String result = taskService.deleteTaskSecure(taskId, principal.getName());
+
+        if (result.startsWith("Error")) {
+            return ResponseEntity.status(403).body(result); // Yetkisiz erişim durumunda 403 fırlat
+        }
+
+        // Canlı yayın anonsu
         try {
             messagingTemplate.convertAndSend("/topic/tasks", "TASK_DELETED");
         } catch (Exception e) {
@@ -66,10 +73,17 @@ public class TaskController {
     }
 
     @PutMapping("/tasks/update/{id}")
-    public ResponseEntity<String> updateTask(@PathVariable Long id, @RequestBody Task updatedTask) {
-        String result = taskService.updateTask(id, updatedTask);
+    public ResponseEntity<String> updateTask(@PathVariable Long id, @RequestBody Task updatedTask, java.security.Principal principal) {
+        if (principal == null) return ResponseEntity.status(401).body("Error: Unauthorized");
 
-        // YENİ: Görev güncellendiğinde (örneğin kolon değiştiğinde) tüm ekranlara anons yap
+        // 🛡️ GÜVENLİK YAMASI: Güncelleme işlemine istek atan kişinin e-posta adresini de gönderiyoruz
+        String result = taskService.updateTaskSecure(id, updatedTask, principal.getName());
+
+        if (result.startsWith("Error")) {
+            return ResponseEntity.status(403).body(result); // Yetkisiz erişim durumunda 403 fırlat
+        }
+
+        // Canlı yayın anonsu
         try {
             messagingTemplate.convertAndSend("/topic/tasks", "TASK_UPDATED");
         } catch (Exception e) {
