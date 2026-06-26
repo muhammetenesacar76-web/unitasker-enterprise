@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/auth")
@@ -23,6 +24,8 @@ public class AuthController {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtUtil jwtUtil;
     @Autowired private EmailService emailService;
+    private final Map<String, Integer> otpAttempts = new ConcurrentHashMap<>();
+    private static final int MAX_ATTEMPTS = 5; // Maksimum hatalı deneme hakkı
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody User user) {
@@ -98,27 +101,31 @@ public class AuthController {
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<String> verifyCode(@RequestBody Map<String, String> request) {
-        String email = request.get("email");
-        String code = request.get("code");
+    public ResponseEntity<String> verifyOTP(@RequestBody VerifyRequest request) { // Sende request sınıfı farklı olabilir (örn: LoginRequest), e-posta ve kodu nereden alıyorsan ona uyarla
 
-        Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            if (code.equals(user.getVerificationCode())) {
-                if (user.getOtpCreationTime() != null && LocalDateTime.now().isAfter(user.getOtpCreationTime().plusMinutes(3))) {
-                    return ResponseEntity.status(400).body("Error: Verification code has expired!");
-                }
-                user.setVerified(true);
-                user.setVerificationCode(null);
-                user.setOtpCreationTime(null);
-                userRepository.save(user);
+        String email = request.getEmail();
 
-                emailService.sendHtmlWelcomeEmail(user.getEmail(), user.getFullName());
-                return ResponseEntity.ok("Verified successfully");
-            }
+        // 1. KONTROL: Bu e-posta daha önce sınırı aşmış mı?
+        int attempts = otpAttempts.getOrDefault(email, 0);
+        if (attempts >= MAX_ATTEMPTS) {
+            return ResponseEntity.status(429).body("Güvenlik İhlali: Çok fazla hatalı deneme yaptınız. Hesabınız geçici olarak kilitlendi!");
+            // (Kurumsal sistemlerde burada 15 dakika bekletilir veya hesaba kilit vurulur)
         }
-        return ResponseEntity.status(400).body("Error: Invalid verification code!");
+
+        // 2. KENDİ KODUN: Senin yazdığın o OTP doğrulama işlemleri burada çalışsın
+        boolean isCodeValid = authService.verifyCode(email, request.getCode()); // Senin metot adın neyse o
+
+        // 3. SONUÇ: Kod Yanlışsa
+        if (!isCodeValid) {
+            otpAttempts.put(email, attempts + 1); // Başarısız deneme sayısını 1 artır
+            return ResponseEntity.status(400).body("Geçersiz veya süresi dolmuş kod! Kalan hakkınız: " + (MAX_ATTEMPTS - attempts - 1));
+        }
+
+        // 4. SONUÇ: Kod Doğruysa
+        otpAttempts.remove(email); // Kişi başardıysa sabıka kaydını temizle!
+
+        // ... senin token üretme veya başarılı yanıt dönme kodların ...
+        return ResponseEntity.ok("Verified successfully!");
     }
 
     @PostMapping("/login")
