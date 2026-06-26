@@ -3,6 +3,7 @@ package com.example.unitaskerbackend.controller;
 import com.example.unitaskerbackend.model.User;
 import com.example.unitaskerbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -44,7 +45,7 @@ public class FileUploadController {
             body.add("image", base64Image);
 
             HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
-            String url = "https://api.imgbb.com/1/upload?key=" + IMGBB_API_KEY;
+            String url = "https://api.imgbb.com/1/upload?key=" + imgbbApiKey;
 
             ResponseEntity<Map> response = restTemplate.postForEntity(url, requestEntity, Map.class);
 
