@@ -521,11 +521,18 @@
     function connectWebSocket(userId) {
         const socket = new SockJS('/ws');
         stompClient = Stomp.over(socket);
-        stompClient.debug = null;
+        stompClient.debug = null; // Konsolu gereksiz mesaj kalabalığından temizler
 
-        stompClient.connect({}, function (frame) {
-            console.log('Canlı Bildirim Sistemine Bağlanıldı!');
+        // 🛡️ GÜVENLİK YAMASI: WebSocket bağlantısı kurulurken JWT Token'ı başlığa ekliyoruz
+        const headers = {
+            'Authorization': 'Bearer ' + jwtToken
+        };
 
+        // Boş küme {} yerine artık hazırladığımız güvenli headers nesnesini gönderiyoruz
+        stompClient.connect(headers, function (frame) {
+            console.log('Canlı Bildirim Sistemine Güvenli Bağlanıldı!');
+
+            // Sadece bu kullanıcının ID'sine ait frekansı dinle
             stompClient.subscribe('/topic/notifications/' + userId, function (notification) {
                 showToast(notification.body, "ai");
                 if (activeUserId == userId) {
@@ -533,16 +540,14 @@
                 }
             });
 
+            // Görevlerin anında güncellenmesini sağlayan ortak kanal
             stompClient.subscribe('/topic/tasks', function (payload) {
                 fetchTasks();
             });
+        }, function (error) {
+            // Token geçersizse veya sunucu bağlantıyı reddederse burası çalışır
+            console.error('WebSocket Güvenlik Reddi: Canlı yayın bağlantısı kurulamadı!', error);
         });
-    }
-
-    function confirmLogout() {
-        if (confirm("Are you sure you want to log out?")) {
-            logout();
-        }
     }
 
     function logout() {
